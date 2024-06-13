@@ -1,6 +1,6 @@
 pip install trimesh pyvista
 pip install xxhash  # for trimesh
- pip install Rtree  # for trimesh contain
+pip install Rtree  # for trimesh contain
 
 ln -s /home/xyy/Documents/SIAT_CAS/xu/tracing/swc_collect/RM009/2.1.0new_swc_largest/ rm009_swcs
 ln -s /home/xyy/Documents/SIAT_CAS/xu/tracing/swc_collect/RM009/mesh rm009_mesh
