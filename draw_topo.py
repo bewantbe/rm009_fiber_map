@@ -165,6 +165,24 @@ def ShowLGNPv(plotter, show_layers = [0]):
         plotter.add_mesh(pv_mesh, smooth_shading=True,
                         opacity = 0.1)
 
+def GetLgnSoma2DCoordinate(pos_soma, lgn_mesh_list):
+    # define manifold that represent projected layer of a LGN layer
+    # for simplicity, here use a planer mesh
+    idx_layer = 3
+    # define the origin of the manifold in the world coordinate
+    origin_pos = np.mean(lgn_mesh_list[idx_layer].vertices, axis = 0)
+    # define coordinate frame at the origin of the manifold (plane)
+    origin_normal = np.array([0, 1, 0])
+    origin_x_direction = np.array([1, 0, 0])
+    origin_y_direction = np.cross(origin_normal, origin_x_direction)
+    # get projection of the soma position on the manifold
+    pos_soma_2d = (pos_soma - origin_pos).dot(
+        np.c_[origin_x_direction, origin_y_direction])
+
+    plt.figure(10)
+    plt.plot(pos_soma_2d[:, 0], pos_soma_2d[:, 1], 'o')
+    plt.show()
+
 if __name__ == '__main__':
     swc_dir = './rm009_swcs'
     swcs_ext = LoadSwcDir(swc_dir)
@@ -217,6 +235,6 @@ if __name__ == '__main__':
     mesh_list = LoadLGNMesh()
     idx_neu_l1 = mesh_list[1].contains(pos_soma)
 
-
+    GetLgnSoma2DCoordinate(pos_soma, mesh_list)
 
 
