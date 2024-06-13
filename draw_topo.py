@@ -21,14 +21,14 @@ logger.error('And non-ASCII stuff, too, like Øresund and Malmö')
 
 import joblib
 
+logger_m = logging.getLogger('matplotlib')
+logger_m.setLevel(logging.WARNING)
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import (
     figure,
     scatter
 )
-logger_m = logging.getLogger('matplotlib')
-logger_m.setLevel(logging.WARNING)
 
 import trimesh
 
@@ -37,6 +37,9 @@ import pyvista as pv
 sys.path.insert(0, '/home/xyy/code/py/vtk_test')
 sys.path.insert(0, '/home/xyy/code/py/fiber-inspector')
 sys.path.insert(0, '/home/xyy/code/py/neurite_walker')
+sys.path.insert(0, '../SimpleVolumeViewer')
+sys.path.insert(0, '../neurite_walker')
+sys.path.insert(0, '../fiber-inspector')
 
 from neu3dviewer.data_loader import (
     LoadSWCTree,
@@ -86,10 +89,10 @@ def BatchLoadSwc(swc_pathes):
         results[i] = LoadRawSwc(f)
     return results
 
-def LoadSwcDir(swc_dir, parallel_lib = 'joblib'):
+def LoadSwcDir(swc_dir, parallel_lib = 'jobliba'):
     if not os.path.isdir(swc_dir):
         logger.error(f'"{swc_dir}" is not a directory!')
-        return
+        raise FileNotFoundError(f'"{swc_dir}" is not a directory!')
     fn_s = glob.glob(swc_dir + '/*.swc')
     if len(fn_s) == 0:
         logger.error(f'"{swc_dir}" do not contain SWC file!')
@@ -121,7 +124,7 @@ def LoadSwcDir(swc_dir, parallel_lib = 'joblib'):
 
 def SortSwcsList(swcs_ext):
     # sort according to neu_id
-    swcs_ext = sorted(swcs_ext, key = 
+    swcs_ext = sorted(swcs_ext, key =                                  \
             lambda x: str(type(x.neu_id)) + str(x.neu_id).zfill(10)
         )
 
@@ -181,7 +184,7 @@ if __name__ == '__main__':
 
     swcs_a = swcs_a[idx_valid]
     pos_soma = pos_soma[idx_valid]
-ShowLGNPlt
+
     # locate soma
     pos_soma2 = np.array([s.ntree[1][0, 0:3] for s in swcs_a])
     assert not np.any(pos_soma2 - pos_soma)
