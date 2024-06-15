@@ -24,6 +24,7 @@ import joblib
 logger_m = logging.getLogger('matplotlib')
 logger_m.setLevel(logging.WARNING)
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import (
     figure,
@@ -263,19 +264,37 @@ def PlotInPyvista(swcs_a, pos_soma, lgn_mesh_s, soma_layer_i):
     # plot soma
     cloud = pv.PolyData(pos_soma)
     cloud['layer'] = soma_layer_i
-    plotter.add_mesh(cloud, color="red", point_size = 10.0,
+    #cmap = plt.cm.get_cmap('Paired')
+    #cmap = matplotlib.colormaps.get_cmap('Paired')
+    cmap = matplotlib.colormaps['Paired']
+    cmap = matplotlib.colors.ListedColormap(cmap.colors[:7])
+    sargs = dict(
+        title_font_size=20,
+        label_font_size=16,
+        shadow=True,
+        n_labels=7,
+        italic=False,
+        fmt="%.1f",
+        font_family="arial",
+    )
+    plotter.add_mesh(cloud, color="red", point_size = 20.0,
                     render_points_as_spheres = True,
-                    scalars = 'layer', cmap = 'viridis')
+                    scalars = 'layer', clim = [0, 6],
+                    cmap = cmap, scalar_bar_args=sargs)
+    #plotter.add_scalar_bar(title="Layer Index", orientation="horizontal",
+    #                    width=0.5, height=0.05, position=[0.25, 0.05],
+    #                    label_font_size=10, n_labels=6, title_font_size=12,
+    #                    color=[0, 20, 0])
     # plot LGN
     ShowMeshBatch(plotter, lgn_mesh_s[1:2])
-    plotter.show_axes()
+    #plotter.show_axes()
 
     # plot 2D map of soma on LGN layer(s)
     frame_manifold = GetLgnSoma2DCoordinate(pos_soma, lgn_mesh_s)
 
     # plot reference manifold
 
-    #plotter.show()       # Press 'q' for quit
+    plotter.show()       # Press 'q' for quit
 
     erwin_data = ReadErwinData()
 
@@ -311,7 +330,7 @@ def PlotInPyvista(swcs_a, pos_soma, lgn_mesh_s, soma_layer_i):
     # python -m pyqtgraph.examples
     #   find the data slicing example
 
-    map_render_mode = 'pyvista'
+    map_render_mode = 'none'
     if map_render_mode == 'pyqtgraph':
         # the pyqtgraph way
         import pyqtgraph as pg
@@ -327,6 +346,8 @@ def PlotInPyvista(swcs_a, pos_soma, lgn_mesh_s, soma_layer_i):
         img_pv = pv.wrap(erwin_data.ecc)
         ss = img_pv.slice_along_axis(n=7, axis="z")
         ss.plot(cmap="viridis", opacity=0.75)
+    elif map_render_mode == 'none':
+        pass
     else:
         logger.warning('No map rendering mode specified!')
 
