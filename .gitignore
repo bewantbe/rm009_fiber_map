@@ -1,0 +1,8 @@
+*#
+*~
+doc/*.pdf
+pic/*.png
+ref/Erwin1999/*.DAT
+ref/Erwin1999/*.dat
+rm009_mesh
+rm009_swcs
