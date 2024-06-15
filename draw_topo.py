@@ -28,7 +28,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import (
     figure,
-    scatter
+    scatter,
 )
 
 logger_m = logging.getLogger('trimesh')
@@ -49,14 +49,15 @@ from neu3dviewer.data_loader import (
     SplitSWCTree,
     SWCDFSSort,
     dtype_id,
-    dtype_coor
+    dtype_coor,
 )
 
 from neu3dviewer.utils import (
     get_num_in_str,
     contain_int,
     Struct,
-    ArrayfyList
+    ArrayfyList,
+    VecNorm,
 )
 
 # mostly copy from the ObjTranslator.obj_swc.LoadRawSwc 
@@ -167,6 +168,16 @@ def ShowMeshBatch(plotter, mesh_list):
         plotter.add_mesh(pv_mesh, smooth_shading=True,
                         opacity = 0.1)
 
+def Normalize(vector):
+    norm = np.linalg.norm(vector)
+    if norm == 0: 
+        return vector  # Return the original vector if its norm is 0
+    return vector / norm
+
+def ProjectNormal(vec, normal):
+    normal = Normalize(normal)
+    return vec - np.dot(vec, normal) * normal
+
 def GetLgnSoma2DCoordinate(pos_soma, lgn_mesh_list):
     # define manifold that represent projected layer of a LGN layer
     # for simplicity, here use a planer mesh
@@ -174,8 +185,9 @@ def GetLgnSoma2DCoordinate(pos_soma, lgn_mesh_list):
     # define the origin of the manifold in the world coordinate
     origin_pos = np.mean(lgn_mesh_list[idx_layer].vertices, axis = 0)
     # define coordinate frame at the origin of the manifold (plane)
-    origin_normal = np.array([0, 1, 0])
-    origin_x_direction = np.array([1, 0, 0])
+    origin_normal = Normalize(np.array([-0.7, 1, 0.9]))
+    origin_x_direction = np.array([1, 0, -0.3])
+    origin_x_direction = Normalize(ProjectNormal(origin_x_direction, origin_normal))
     origin_y_direction = np.cross(origin_normal, origin_x_direction)
     # get projection of the soma position on the manifold
     pos_soma_2d = (pos_soma - origin_pos).dot(
@@ -194,8 +206,8 @@ def GetLgnSoma2DCoordinate(pos_soma, lgn_mesh_list):
         normal = origin_normal,
         x_axis = origin_x_direction,
         y_axis = origin_y_direction,
-        x_range = [-10000, 10000],
-        y_range = [-10000, 10000],
+        x_range = [-5000, 5000],
+        y_range = [-5000, 5000],
     )
 
     return frame_manifold
@@ -264,8 +276,6 @@ def PlotInPyvista(swcs_a, pos_soma, lgn_mesh_s, soma_layer_i):
     # plot soma
     cloud = pv.PolyData(pos_soma)
     cloud['layer'] = soma_layer_i
-    #cmap = plt.cm.get_cmap('Paired')
-    #cmap = matplotlib.colormaps.get_cmap('Paired')
     cmap = matplotlib.colormaps['Paired']
     cmap = matplotlib.colors.ListedColormap(cmap.colors[:7])
     sargs = dict(
@@ -274,23 +284,43 @@ def PlotInPyvista(swcs_a, pos_soma, lgn_mesh_s, soma_layer_i):
         shadow=True,
         n_labels=7,
         italic=False,
-        fmt="%.1f",
+        fmt="%.1g",
         font_family="arial",
     )
     plotter.add_mesh(cloud, color="red", point_size = 20.0,
                     render_points_as_spheres = True,
-                    scalars = 'layer', clim = [0, 6],
+                    scalars = 'layer', clim = [0, 6.1],
                     cmap = cmap, scalar_bar_args=sargs)
-    #plotter.add_scalar_bar(title="Layer Index", orientation="horizontal",
-    #                    width=0.5, height=0.05, position=[0.25, 0.05],
-    #                    label_font_size=10, n_labels=6, title_font_size=12,
-    #                    color=[0, 20, 0])
+
     # plot LGN
     ShowMeshBatch(plotter, lgn_mesh_s[1:2])
-    #plotter.show_axes()
+    plotter.show_axes()
 
     # plot 2D map of soma on LGN layer(s)
     frame_manifold = GetLgnSoma2DCoordinate(pos_soma, lgn_mesh_s)
+    # plot reference manifold
+    frame_geo = pv.Plane(
+            center = frame_manifold.origin,
+            direction = frame_manifold.normal,
+            i_size = frame_manifold.x_range[1],
+            j_size = frame_manifold.y_range[1])
+    plotter.add_mesh(frame_geo, opacity=0.7)
+    arrow_scale = frame_manifold.x_range[1] * 0.35
+    frame_geo_normal = pv.Arrow(
+            start = frame_manifold.origin,
+            direction = frame_manifold.normal,
+            scale = arrow_scale)
+    frame_geo_x = pv.Arrow(
+            start = frame_manifold.origin,
+            direction = frame_manifold.x_axis,
+            scale = arrow_scale)
+    frame_geo_y = pv.Arrow(
+            start = frame_manifold.origin,
+            direction = frame_manifold.y_axis,
+            scale = arrow_scale)
+    plotter.add_mesh(frame_geo_normal, color='blue')
+    plotter.add_mesh(frame_geo_x, color='red')
+    plotter.add_mesh(frame_geo_y, color='green')
 
     # plot reference manifold
 
