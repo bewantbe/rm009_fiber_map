@@ -213,7 +213,52 @@ def PlotInMatplotlib(swcs_a, pos_soma, lgn_mesh_s):
     ax.set_zlabel('z')
     ShowLGNPlt(ax)
 
+def ReadErwinData():
+    dir_path = 'ref/Erwin1999'
+    volume_dims = (240, 280, 320)  # medial-lateral, dorsal-ventral, anterior-posterior
+    voxel_size_um = (25, 25, 25)
+    # Horsley-Clarke position of the origin
+    origin_mm = (8.5, -1.5, 3.5)  # lateral, dorsal, anterior
+    # data format: binary little-endian int16 array
+    # read ECC.DAT, eccentricity map
+    with open(os.path.join(dir_path, 'ECC.DAT'), 'rb') as f:
+        data = np.fromfile(f, dtype=np.int16)
+        ecc = data.reshape(volume_dims, order='F').astype(np.float32)
+        # Rounded to the nearest 0.1°, then multiplied by 10
+        # Extralaminar space is coded 999
+        ecc[ecc!=999] /= 10
+        ecc[ecc==999] = np.nan
+        #ecc[ecc==999] = 0
+    # read INCL.DAT, inclination map
+    with open(os.path.join(dir_path, 'INCL.DAT'), 'rb') as f:
+        data = np.fromfile(f, dtype=np.int16)
+        incl = data.reshape(volume_dims, order='F').astype(np.float32)
+        # rounded to the nearest degree
+        # Extralaminar space is coded 999
+    # read LAYERS.DAT, laminar map, 8-bit integers
+    with open(os.path.join(dir_path, 'LAYERS.DAT'), 'rb') as f:
+        data = np.fromfile(f, dtype=np.uint8)
+        layers = data.reshape(volume_dims, order='F')
+        # 1 = contra magno; 2 = ipsi magno; 3 = ipsi parvo; 4 = contra parvo
+        # Extralaminar space is coded zero
+    # read CELLS.DAT, cell density map, 16-bit integers
+    with open(os.path.join(dir_path, 'CELLS.DAT'), 'rb') as f:
+        data = np.fromfile(f, dtype=np.int16)
+        cells = data.reshape(volume_dims, order='F').astype(np.float32)
+        # cells/voxel multiplied by 1000
+        cells = cells / 1000
+    erwin_data = Struct(
+        ecc = ecc,
+        incl = incl,
+        layers = layers,
+        cells = cells,
+        origin_mm = origin_mm,
+        voxel_size_um = voxel_size_um
+    )
+    return erwin_data
+
 def PlotInPyvista(swcs_a, pos_soma, lgn_mesh_s, soma_layer_i):
+    """Main ploting function"""
     plotter = pv.Plotter()
     # plot soma
     cloud = pv.PolyData(pos_soma)
@@ -230,7 +275,61 @@ def PlotInPyvista(swcs_a, pos_soma, lgn_mesh_s, soma_layer_i):
 
     # plot reference manifold
 
-    plotter.show()       # Press 'q' for quit
+    #plotter.show()       # Press 'q' for quit
+
+    erwin_data = ReadErwinData()
+
+    ml_idx = 120
+    plt.figure(10)
+    plt.imshow(erwin_data.ecc[ml_idx, :, :])
+    plt.colorbar()
+    plt.title(f'eccentricity, medial-lateral idx={ml_idx}')
+    plt.xlabel('anterior-posterior')
+    plt.ylabel('dorsal-ventral')
+    OutputFigure(f'ecc_map_ml{ml_idx}.png')
+
+    ap_idx = 120
+    plt.figure(11)
+    plt.imshow(erwin_data.ecc[:, :, ap_idx])
+    plt.colorbar()
+    plt.title(f'inclination, anterior-posterior idx={ap_idx}')
+    plt.xlabel('medial-lateral')
+    plt.ylabel('dorsal-ventral')
+    OutputFigure(f'ecc_map_ap{ap_idx}.png')
+
+    ap_idx = 120
+    plt.figure(21)
+    plt.imshow(erwin_data.layers[:, :, ap_idx])
+    plt.colorbar()
+    plt.title(f'laminar type, anterior-posterior idx={ap_idx}')
+    plt.xlabel('medial-lateral')
+    plt.ylabel('dorsal-ventral')
+    OutputFigure(f'layers_map_ap{ap_idx}.png')
+
+    # TODO:  we need to plot 3D map in 2D with a slider for slicing
+    # maybe use pyvista or PyQtGraph
+    # python -m pyqtgraph.examples
+    #   find the data slicing example
+
+    map_render_mode = 'pyvista'
+    if map_render_mode == 'pyqtgraph':
+        # the pyqtgraph way
+        import pyqtgraph as pg
+        from pyqtgraph.Qt import QtWidgets
+
+        app = pg.mkQApp("Data Slicing Example")
+        win = QtWidgets.QMainWindow()
+        win.resize(800,800)
+        # TODO: add a slider for slicing
+
+    elif map_render_mode == 'pyvista':
+        # the pyvista way
+        img_pv = pv.wrap(erwin_data.ecc)
+        ss = img_pv.slice_along_axis(n=7, axis="z")
+        ss.plot(cmap="viridis", opacity=0.75)
+    else:
+        logger.warning('No map rendering mode specified!')
+
 
 OutputFigure = lambda fn: plt.savefig(os.path.join('./pic', fn))
 
