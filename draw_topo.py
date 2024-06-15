@@ -181,60 +181,90 @@ def GetLgnSoma2DCoordinate(pos_soma, lgn_mesh_list):
 
     plt.figure(10)
     plt.plot(pos_soma_2d[:, 0], pos_soma_2d[:, 1], 'o')
-    plt.show()
+    #plt.show()
+    OutputFigure('soma_lgn_map.png')
+    plt.cla()
+    plt.clf()
+
+    frame_manifold = Struct(
+        type = 'plane',
+        origin = origin_pos,
+        normal = origin_normal,
+        x_axis = origin_x_direction,
+        y_axis = origin_y_direction,
+        x_range = [-10000, 10000],
+        y_range = [-10000, 10000],
+    )
+
+    return frame_manifold
+
+def PlotInMatplotlib(swcs_a, pos_soma, lgn_mesh_s):
+    # plot soma position
+    plt.ion()
+    fig = plt.figure(1)
+    fig.clf()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.cla()
+    ax.scatter(pos_soma[:, 0], pos_soma[:, 1], pos_soma[:, 2])
+    ax.set_aspect('equal', adjustable='box')
+    ax.set_xlabel('x')
+    ax.set_ylabel('y')
+    ax.set_zlabel('z')
+    ShowLGNPlt(ax)
+
+def PlotInPyvista(swcs_a, pos_soma, lgn_mesh_s):
+    plotter = pv.Plotter()
+    # plot soma
+    cloud = pv.PolyData(pos_soma)
+    plotter.add_mesh(cloud, color="red", point_size = 10.0,
+                    render_points_as_spheres = True)
+    # plot LGN
+    ShowLGNPv(plotter)
+    plotter.show_axes()
+
+    # plot 2D map of soma on LGN layer(s)
+    frame_manifold = GetLgnSoma2DCoordinate(pos_soma, lgn_mesh_s)
+
+    # plot reference manifold
+
+    plotter.show()       # Press 'q' for quit
+
+OutputFigure = lambda fn: plt.savefig(os.path.join('./pic', fn))
 
 if __name__ == '__main__':
     swc_dir = './rm009_swcs'
+
+    ## load and check SWCs
     swcs_ext = LoadSwcDir(swc_dir)
-
     swcs_ext = SortSwcsList(swcs_ext)
-
     swcs_a = ArrayfyList(swcs_ext, index_list = 
             [s.neu_id for s in swcs_ext]
         )
     CheckDuplicateName(swcs_a)
 
+    ## filter soma in LGN
     # locate soma
     pos_soma = np.array([s.ntree[1][0, 0:3] for s in swcs_a])
-
-    # filter these in LGN
     idx_valid = pos_soma[:, 2] < 40000
-
     swcs_a = swcs_a[idx_valid]
     pos_soma = pos_soma[idx_valid]
-
-    # locate soma
+    # location of soma
     pos_soma2 = np.array([s.ntree[1][0, 0:3] for s in swcs_a])
     assert not np.any(pos_soma2 - pos_soma)
 
+    ## load LGN mesh
+    lgn_mesh_s = LoadLGNMesh()
+    idx_neu_l1 = lgn_mesh_s[1].contains(pos_soma)
+
+    ## plat soma with LGN mesh
     plot_mode = 'pyvista'
     if plot_mode == 'plt':
-        # plot soma position
-        plt.ion()
-        fig = plt.figure(1)
-        fig.clf()
-        ax = fig.add_subplot(111, projection='3d')
-        ax.cla()
-        ax.scatter(pos_soma[:, 0], pos_soma[:, 1], pos_soma[:, 2])
-        ax.set_aspect('equal', adjustable='box')
-        ax.set_xlabel('x')
-        ax.set_ylabel('y')
-        ax.set_zlabel('z')
-        ShowLGNPlt(ax)
+        PlotInMatplotlib(swcs_a, pos_soma, lgn_mesh_s)
     elif plot_mode == 'pyvista':
-        plotter = pv.Plotter()
-        # plot soma
-        cloud = pv.PolyData(pos_soma)
-        plotter.add_mesh(cloud, color="red", point_size = 10.0,
-                        render_points_as_spheres = True)
-        # plot LGN
-        ShowLGNPv(plotter)
-        plotter.show_axes()
-        plotter.show()       # Press 'q' for quit
+        PlotInPyvista(swcs_a, pos_soma, lgn_mesh_s)
+    else:
+        pass
 
-    mesh_list = LoadLGNMesh()
-    idx_neu_l1 = mesh_list[1].contains(pos_soma)
 
-    GetLgnSoma2DCoordinate(pos_soma, mesh_list)
 
 
