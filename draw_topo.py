@@ -30,6 +30,8 @@ from matplotlib.pyplot import (
     scatter
 )
 
+logger_m = logging.getLogger('trimesh')
+logger_m.setLevel(logging.WARNING)
 import trimesh
 
 import pyvista as pv
@@ -89,7 +91,7 @@ def BatchLoadSwc(swc_pathes):
         results[i] = LoadRawSwc(f)
     return results
 
-def LoadSwcDir(swc_dir, parallel_lib = 'jobliba'):
+def LoadSwcDir(swc_dir, parallel_lib = 'joblib'):
     if not os.path.isdir(swc_dir):
         logger.error(f'"{swc_dir}" is not a directory!')
         raise FileNotFoundError(f'"{swc_dir}" is not a directory!')
@@ -108,7 +110,8 @@ def LoadSwcDir(swc_dir, parallel_lib = 'jobliba'):
 
     # run in parallel or serial
     if parallel_lib == 'joblib':
-        results_batch = joblib.Parallel(n_jobs = 4) \
+        logger.info('Loading SWC files in parallel ...')
+        results_batch = joblib.Parallel(n_jobs = 4, verbose=2) \
             (joblib.delayed(BatchLoadSwc)(j)
                 for j in swc_batch_list)
         # unpack the batch
@@ -156,10 +159,8 @@ def ShowLGNPlt(ax, show_layers = [0]):
         ax.plot_trisurf(x, y, z, triangles=mesh.faces,
             color='grey', alpha=0.1)
 
-def ShowLGNPv(plotter, show_layers = [0]):
-    mesh_list = LoadLGNMesh()
-    for idx_l in show_layers:
-        mesh = mesh_list[idx_l]
+def ShowMeshBatch(plotter, mesh_list):
+    for mesh in mesh_list:
         pv_mesh = pv.PolyData(mesh.vertices,
                     np.c_[[[3]]*len(mesh.faces),mesh.faces])
         plotter.add_mesh(pv_mesh, smooth_shading=True,
@@ -212,14 +213,16 @@ def PlotInMatplotlib(swcs_a, pos_soma, lgn_mesh_s):
     ax.set_zlabel('z')
     ShowLGNPlt(ax)
 
-def PlotInPyvista(swcs_a, pos_soma, lgn_mesh_s):
+def PlotInPyvista(swcs_a, pos_soma, lgn_mesh_s, soma_layer_i):
     plotter = pv.Plotter()
     # plot soma
     cloud = pv.PolyData(pos_soma)
+    cloud['layer'] = soma_layer_i
     plotter.add_mesh(cloud, color="red", point_size = 10.0,
-                    render_points_as_spheres = True)
+                    render_points_as_spheres = True,
+                    scalars = 'layer', cmap = 'viridis')
     # plot LGN
-    ShowLGNPv(plotter)
+    ShowMeshBatch(plotter, lgn_mesh_s[1:2])
     plotter.show_axes()
 
     # plot 2D map of soma on LGN layer(s)
@@ -252,16 +255,21 @@ if __name__ == '__main__':
     pos_soma2 = np.array([s.ntree[1][0, 0:3] for s in swcs_a])
     assert not np.any(pos_soma2 - pos_soma)
 
-    ## load LGN mesh
+    ## load LGN mesh, 0:LGN, 1-6:LGN layers 1-6
     lgn_mesh_s = LoadLGNMesh()
-    idx_neu_l1 = lgn_mesh_s[1].contains(pos_soma)
+    soma_layer_i = np.zeros(len(pos_soma), dtype=np.int32)
+    for i_layer in range(len(lgn_mesh_s)):
+        bidx = lgn_mesh_s[i_layer].contains(pos_soma)
+        # note that we must put LGN to the first mesh,
+        # to be overwritten by detailed layers
+        soma_layer_i[bidx] = i_layer
 
     ## plat soma with LGN mesh
     plot_mode = 'pyvista'
     if plot_mode == 'plt':
-        PlotInMatplotlib(swcs_a, pos_soma, lgn_mesh_s)
+        PlotInMatplotlib(swcs_a, pos_soma, lgn_mesh_s, soma_layer_i)
     elif plot_mode == 'pyvista':
-        PlotInPyvista(swcs_a, pos_soma, lgn_mesh_s)
+        PlotInPyvista(swcs_a, pos_soma, lgn_mesh_s, soma_layer_i)
     else:
         pass
 
