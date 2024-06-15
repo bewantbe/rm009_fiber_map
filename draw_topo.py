@@ -193,8 +193,11 @@ def GetLgnSoma2DCoordinate(pos_soma, lgn_mesh_list):
     pos_soma_2d = (pos_soma - origin_pos).dot(
         np.c_[origin_x_direction, origin_y_direction])
 
+    ## draw the 2D map
     plt.figure(10)
     plt.plot(pos_soma_2d[:, 0], pos_soma_2d[:, 1], 'o')
+    plt.xlabel('Inclination')
+    plt.ylabel('Eccentricity')
     #plt.show()
     OutputFigure('soma_lgn_map.png')
     plt.cla()
@@ -210,7 +213,7 @@ def GetLgnSoma2DCoordinate(pos_soma, lgn_mesh_list):
         y_range = [-5000, 5000],
     )
 
-    return frame_manifold
+    return frame_manifold, pos_soma_2d
 
 def PlotInMatplotlib(swcs_a, pos_soma, lgn_mesh_s):
     # plot soma position
@@ -273,7 +276,8 @@ def ReadErwinData():
 def PlotInPyvista(swcs_a, pos_soma, lgn_mesh_s, soma_layer_i):
     """Main ploting function"""
     plotter = pv.Plotter()
-    # plot soma
+
+    ## plot soma
     cloud = pv.PolyData(pos_soma)
     cloud['layer'] = soma_layer_i
     cmap = matplotlib.colormaps['Paired']
@@ -292,12 +296,12 @@ def PlotInPyvista(swcs_a, pos_soma, lgn_mesh_s, soma_layer_i):
                     scalars = 'layer', clim = [0, 6.1],
                     cmap = cmap, scalar_bar_args=sargs)
 
-    # plot LGN
+    ## plot LGN layer mesh
     ShowMeshBatch(plotter, lgn_mesh_s[1:2])
     plotter.show_axes()
 
-    # plot 2D map of soma on LGN layer(s)
-    frame_manifold = GetLgnSoma2DCoordinate(pos_soma, lgn_mesh_s)
+    ## plot 2D map reference of LGN layer(s)
+    frame_manifold, pos_soma_2d = GetLgnSoma2DCoordinate(pos_soma, lgn_mesh_s)
     # plot reference manifold
     frame_geo = pv.Plane(
             center = frame_manifold.origin,
@@ -305,6 +309,7 @@ def PlotInPyvista(swcs_a, pos_soma, lgn_mesh_s, soma_layer_i):
             i_size = frame_manifold.x_range[1],
             j_size = frame_manifold.y_range[1])
     plotter.add_mesh(frame_geo, opacity=0.7)
+    # plot coordinate frame
     arrow_scale = frame_manifold.x_range[1] * 0.35
     frame_geo_normal = pv.Arrow(
             start = frame_manifold.origin,
@@ -322,10 +327,11 @@ def PlotInPyvista(swcs_a, pos_soma, lgn_mesh_s, soma_layer_i):
     plotter.add_mesh(frame_geo_x, color='red')
     plotter.add_mesh(frame_geo_y, color='green')
 
-    # plot reference manifold
+    ## plot V1 terminal positions
 
     plotter.show()       # Press 'q' for quit
 
+    ## LGN reference map
     erwin_data = ReadErwinData()
 
     ml_idx = 120
