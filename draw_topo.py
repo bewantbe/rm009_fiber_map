@@ -250,6 +250,62 @@ def GetLgnSoma2DCoordinate(pos_soma, lgn_mesh_list):
 
     return frame_manifold, pos_soma_2d
 
+def GetV1Terminal2DCoordinate(pos_terminal, v1_mesh):
+    # define manifold that represent projected layer of a LGN layer
+    # for simplicity, here use a planer mesh
+    idx_layer = 3
+    # note
+    # blender	obj
+    # x	  	x
+    # y		-z
+    # z		y
+    ## define the origin of the manifold in the world coordinate
+    #origin_pos = np.array([4871.33, -5835.53, 2509.96]) * 10.0
+    ## define coordinate frame at the origin of the manifold (plane)
+    #px = np.array([5254.99, -5188.76, 2095.69]) * 10.0
+    #po = np.array([4296.63, -5901.01, 1875.48]) * 10.0
+    #py = np.array([4487.67, -6482.3 , 2924.23]) * 10.0
+    # define the origin of the manifold in the world coordinate
+    origin_pos = np.array([4871.33, 2509.96, 5835.53]) * 10.0
+    # define coordinate frame at the origin of the manifold (plane)
+    px = np.array([5254.99, 2095.69, 5188.76]) * 10.0
+    po = np.array([4296.63, 1875.48, 5901.01]) * 10.0
+    py = np.array([4487.67, 2924.23, 6482.3 ]) * 10.0
+    # define the origin of the manifold in the world coordinate
+    #origin_pos = np.array([2509.96, -5835.53, 4871.33]) * 10.0
+    # define coordinate frame at the origin of the manifold (plane)
+    #px = np.array([2095.69, -5188.76, 5254.99]) * 10.0
+    #po = np.array([1875.48, -5901.01, 4296.63]) * 10.0
+    #py = np.array([2924.23, -6482.3 , 4487.67]) * 10.0
+    origin_x_direction = Normalize(px - po)
+    origin_y_direction = Normalize(py - po) 
+    origin_normal = np.cross(origin_x_direction, origin_y_direction)
+    # get projection of the soma position on the manifold
+    pos_terminal_2d = (pos_terminal - origin_pos).dot(
+        np.c_[origin_x_direction, origin_y_direction])
+
+    ## draw the 2D map
+    plt.figure(20)
+    plt.plot(pos_terminal_2d[:, 0], pos_terminal_2d[:, 1], 'o')
+    plt.xlabel('Inclination (x)')
+    plt.ylabel('Eccentricity (y)')
+    #plt.show()
+    OutputFigure('terminal_v1_map.png')
+    plt.cla()
+    plt.clf()
+
+    frame_manifold = Struct(
+        type = 'plane',
+        origin = origin_pos,
+        normal = origin_normal,
+        x_axis = origin_x_direction,
+        y_axis = origin_y_direction,
+        x_range = np.array([-1, 1]) * np.linalg.norm(px-po),
+        y_range = np.array([-1, 1]) * np.linalg.norm(py-po),
+    )
+
+    return frame_manifold, pos_terminal_2d
+
 def PlotInMatplotlib(swcs_a, pos_soma, lgn_mesh_s, v1_mesh):
     # plot soma position
     plt.ion()
@@ -366,17 +422,63 @@ def PlotInPyvista(swcs_a, pos_soma, lgn_mesh_s, soma_layer_i, v1_mesh):
 
     ## plot V1 and swc terminal positions
     plotter = pv.Plotter()
-    ShowMeshBatch(plotter, [v1_mesh])
+    # plot V1
+    #ShowMeshBatch(plotter, [v1_mesh])
+
+    mesh_dir = './rm009_mesh/region/V1/'
+    mesh_fn = '3_f800.obj'
+    mesh_fn_path = os.path.join(mesh_dir, mesh_fn)
+    v1_s_mesh = trimesh.load_mesh(mesh_fn_path)
+    v1_s_mesh.vertices *= 10.0
+    ShowMeshBatch(plotter, [v1_s_mesh])
+
+    v1_mesh = v1_s_mesh  # use simplified mesh for now
+
+    # get terminal points
     point_set = []
     for ntr in swcs_a.ntree_ext:
-        b_leaves = exec_filter_string('path_length_to_root(leaves) > 0', ntr)
-        point_set.append(ntr.position_of_node(ntr.leaves[b_leaves]))
+        b_leaves = exec_filter_string('(path_length_to_root(leaves) > 30000) & (branch_depth(leaves) >= 5)', ntr)
+        pos = ntr.position_of_node(ntr.leaves[b_leaves])
+        point_set.append(pos)
+        #bidx = v1_mesh.contains(pos)   # very slow, >1 hours
+        #point_set.append(pos[bidx])
     point_set = np.concatenate(point_set, axis = 0)
+    # plot terminal points
     cloud = pv.PolyData(point_set)
     plotter.add_mesh(cloud, color="red", point_size = 20.0,
-                    render_points_as_spheres = True)
+                     render_points_as_spheres = True)
+    # plot also LGN
     ShowMeshBatch(plotter, lgn_mesh_s[1:2])
     plotter.show_axes()
+    
+
+    ## plot 2D map reference of V1
+    frame_manifold, pos_terminal_2d = GetV1Terminal2DCoordinate(point_set, v1_mesh)
+    # plot reference manifold
+    frame_geo = pv.Plane(
+            center = frame_manifold.origin,
+            direction = frame_manifold.normal,
+            i_size = frame_manifold.x_range[1],
+            j_size = frame_manifold.y_range[1])
+    plotter.add_mesh(frame_geo, opacity=0.7)
+    # plot coordinate frame
+    arrow_scale = frame_manifold.x_range[1] * 0.35
+    frame_geo_normal = pv.Arrow(
+            start = frame_manifold.origin,
+            direction = frame_manifold.normal,
+            scale = arrow_scale)
+    frame_geo_x = pv.Arrow(
+            start = frame_manifold.origin,
+            direction = frame_manifold.x_axis,
+            scale = arrow_scale)
+    frame_geo_y = pv.Arrow(
+            start = frame_manifold.origin,
+            direction = frame_manifold.y_axis,
+            scale = arrow_scale)
+    plotter.add_mesh(frame_geo_normal, color='blue')
+    plotter.add_mesh(frame_geo_x, color='red')
+    plotter.add_mesh(frame_geo_y, color='green')
+
     plotter.show()
 
     ## LGN reference map
