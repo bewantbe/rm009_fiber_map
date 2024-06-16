@@ -101,7 +101,20 @@ def BatchLoadSwc(swc_pathes):
         results[i] = LoadRawSwc(f)
     return results
 
-def LoadSwcDir(swc_dir, parallel_lib = 'joblib'):
+def is_interactive():
+    #try:
+    #    shell = get_ipython().__class__.__name__
+    #    if shell == 'ZMQInteractiveShell':
+    #        return True   # Jupyter notebook or qtconsole
+    #    elif shell == 'TerminalInteractiveShell':
+    #        return False  # Terminal running IPython
+    #    else:
+    #        return False  # Other type (?)
+    #except NameError:
+    #    return False      # Probably standard Python interpreter
+    return hasattr(__builtins__,'__IPYTHON__')
+
+def LoadSwcDir(swc_dir, parallel_lib = 'auto'):
     if not os.path.isdir(swc_dir):
         logger.error(f'"{swc_dir}" is not a directory!')
         raise FileNotFoundError(f'"{swc_dir}" is not a directory!')
@@ -118,10 +131,16 @@ def LoadSwcDir(swc_dir, parallel_lib = 'joblib'):
         swc_batch_list.append(fn_s[k : k + batch_size])
         k += batch_size
 
+    if parallel_lib == 'auto':
+        if is_interactive():
+            parallel_lib = 'serial'
+        else:
+            parallel_lib = 'joblib'
+
     # run in parallel or serial
     if parallel_lib == 'joblib':
         logger.info('Loading SWC files in parallel ...')
-        results_batch = joblib.Parallel(n_jobs = 4, verbose=2) \
+        results_batch = joblib.Parallel(n_jobs = 8, verbose=2) \
             (joblib.delayed(BatchLoadSwc)(j)
                 for j in swc_batch_list)
         # unpack the batch
@@ -160,6 +179,14 @@ def LoadLGNMesh():
         mesh.vertices *= 10.0
         mesh_list.append(mesh)
     return mesh_list
+
+def LoadV1Mesh():
+    mesh_dir = './rm009_mesh/region/V1/'
+    mesh_fn = '3.obj'
+    mesh_fn_path = os.path.join(mesh_dir, mesh_fn)
+    mesh = trimesh.load_mesh(mesh_fn_path)
+    mesh.vertices *= 10.0
+    return mesh
 
 def ShowLGNPlt(ax, show_layers = [0]):
     mesh_list = LoadLGNMesh()
@@ -223,7 +250,7 @@ def GetLgnSoma2DCoordinate(pos_soma, lgn_mesh_list):
 
     return frame_manifold, pos_soma_2d
 
-def PlotInMatplotlib(swcs_a, pos_soma, lgn_mesh_s):
+def PlotInMatplotlib(swcs_a, pos_soma, lgn_mesh_s, v1_mesh):
     # plot soma position
     plt.ion()
     fig = plt.figure(1)
@@ -281,7 +308,7 @@ def ReadErwinData():
     )
     return erwin_data
 
-def PlotInPyvista(swcs_a, pos_soma, lgn_mesh_s, soma_layer_i):
+def PlotInPyvista(swcs_a, pos_soma, lgn_mesh_s, soma_layer_i, v1_mesh):
     """Main ploting function"""
     plotter = pv.Plotter()
 
@@ -335,9 +362,22 @@ def PlotInPyvista(swcs_a, pos_soma, lgn_mesh_s, soma_layer_i):
     plotter.add_mesh(frame_geo_x, color='red')
     plotter.add_mesh(frame_geo_y, color='green')
 
-    ## plot V1 terminal positions
-
     plotter.show()       # Press 'q' for quit
+
+    ## plot V1 and swc terminal positions
+    plotter = pv.Plotter()
+    ShowMeshBatch(plotter, [v1_mesh])
+    point_set = []
+    for ntr in swcs_a.ntree_ext:
+        b_leaves = exec_filter_string('path_length_to_root(leaves) > 0', ntr)
+        point_set.append(ntr.position_of_node(ntr.leaves[b_leaves]))
+    point_set = np.concatenate(point_set, axis = 0)
+    cloud = pv.PolyData(point_set)
+    plotter.add_mesh(cloud, color="red", point_size = 20.0,
+                    render_points_as_spheres = True)
+    ShowMeshBatch(plotter, lgn_mesh_s[1:2])
+    plotter.show_axes()
+    plotter.show()
 
     ## LGN reference map
     erwin_data = ReadErwinData()
@@ -395,7 +435,6 @@ def PlotInPyvista(swcs_a, pos_soma, lgn_mesh_s, soma_layer_i):
     else:
         logger.warning('No map rendering mode specified!')
 
-
 OutputFigure = lambda fn: plt.savefig(os.path.join('./pic', fn))
 
 if __name__ == '__main__':
@@ -428,12 +467,15 @@ if __name__ == '__main__':
         # to be overwritten by detailed layers
         soma_layer_i[bidx] = i_layer
 
+    ## load V1 mesh
+    v1_mesh = LoadV1Mesh()
+
     ## plat soma with LGN mesh
     plot_mode = 'pyvista'
     if plot_mode == 'plt':
-        PlotInMatplotlib(swcs_a, pos_soma, lgn_mesh_s, soma_layer_i)
+        PlotInMatplotlib(swcs_a, pos_soma, lgn_mesh_s, soma_layer_i, v1_mesh)
     elif plot_mode == 'pyvista':
-        PlotInPyvista(swcs_a, pos_soma, lgn_mesh_s, soma_layer_i)
+        PlotInPyvista(swcs_a, pos_soma, lgn_mesh_s, soma_layer_i, v1_mesh)
     else:
         pass
 
