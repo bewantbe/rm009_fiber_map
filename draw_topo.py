@@ -228,16 +228,6 @@ def GetLgnSoma2DCoordinate(pos_soma, lgn_mesh_list):
     pos_soma_2d = (pos_soma - origin_pos).dot(
         np.c_[origin_x_direction, origin_y_direction])
 
-    ## draw the 2D map
-    plt.figure(10)
-    plt.plot(pos_soma_2d[:, 0], pos_soma_2d[:, 1], 'o')
-    plt.xlabel('Inclination')
-    plt.ylabel('Eccentricity')
-    #plt.show()
-    OutputFigure('soma_lgn_map.png')
-    plt.cla()
-    plt.clf()
-
     frame_manifold = Struct(
         type = 'plane',
         origin = origin_pos,
@@ -283,16 +273,6 @@ def GetV1Terminal2DCoordinate(pos_terminal, v1_mesh):
     # get projection of the soma position on the manifold
     pos_terminal_2d = (pos_terminal - origin_pos).dot(
         np.c_[origin_x_direction, origin_y_direction])
-
-    ## draw the 2D map
-    plt.figure(20)
-    plt.plot(pos_terminal_2d[:, 0], pos_terminal_2d[:, 1], 'o')
-    plt.xlabel('Inclination (x)')
-    plt.ylabel('Eccentricity (y)')
-    #plt.show()
-    OutputFigure('terminal_v1_map.png')
-    plt.cla()
-    plt.clf()
 
     frame_manifold = Struct(
         type = 'plane',
@@ -393,6 +373,21 @@ def PlotInPyvista(swcs_a, pos_soma, lgn_mesh_s, soma_layer_i, v1_mesh):
 
     ## plot 2D map reference of LGN layer(s)
     frame_manifold, pos_soma_2d = GetLgnSoma2DCoordinate(pos_soma, lgn_mesh_s)
+
+    ## draw the 2D map
+    plt.figure(10)
+    #plt.plot(pos_soma_2d[:, 0], pos_soma_2d[:, 1], 'o')
+    c = (pos_soma_2d[:, 0] - 0) * 1
+    plt.scatter(pos_soma_2d[:, 0], pos_soma_2d[:, 1],
+                c=c, cmap='viridis', s = 50)
+    plt.xlabel('Inclination')
+    plt.ylabel('Eccentricity')
+    plt.title('LGN')
+    #plt.show()
+    OutputFigure('soma_lgn_map.png')
+    plt.cla()
+    plt.clf()
+
     # plot reference manifold
     frame_geo = pv.Plane(
             center = frame_manifold.origin,
@@ -436,13 +431,21 @@ def PlotInPyvista(swcs_a, pos_soma, lgn_mesh_s, soma_layer_i, v1_mesh):
 
     # get terminal points
     point_set = []
-    for ntr in swcs_a.ntree_ext:
+    point_set_scalar = []
+    for j, ntr in enumerate(swcs_a.ntree_ext):
         b_leaves = exec_filter_string('(path_length_to_root(leaves) > 30000) & (branch_depth(leaves) >= 5)', ntr)
         pos = ntr.position_of_node(ntr.leaves[b_leaves])
+        #b_proc = exec_filter_string('(path_length_to_root(end_point(processes)) > 30000) & (branch_depth(processes) == 7)', ntr)
+        #pos = ntr.position_of_node(ntr.end_point(ntr.processes)[b_proc])
         point_set.append(pos)
+        #c = (pos_soma_2d[j, 0] - 0) * 1
+        ll = soma_layer_i[j]
+        c = 1 * ((ll == 6) | (ll == 4) | (ll == 1)) + np.random.rand() * 0.01
+        point_set_scalar.append(np.ones(len(pos)) * c)
         #bidx = v1_mesh.contains(pos)   # very slow, >1 hours
         #point_set.append(pos[bidx])
     point_set = np.concatenate(point_set, axis = 0)
+    point_set_scalar = np.concatenate(point_set_scalar, axis = 0)
     # plot terminal points
     cloud = pv.PolyData(point_set)
     plotter.add_mesh(cloud, color="red", point_size = 20.0,
@@ -454,6 +457,19 @@ def PlotInPyvista(swcs_a, pos_soma, lgn_mesh_s, soma_layer_i, v1_mesh):
 
     ## plot 2D map reference of V1
     frame_manifold, pos_terminal_2d = GetV1Terminal2DCoordinate(point_set, v1_mesh)
+    
+    ## draw the 2D map
+    plt.figure(20)
+    plt.scatter(pos_terminal_2d[:, 0], pos_terminal_2d[:, 1],
+                c = point_set_scalar, cmap='viridis', s = 0.2)
+    #plt.xlabel('Inclination (x)')
+    #plt.ylabel('Eccentricity (y)')
+    #plt.show()
+    plt.title('V1')
+    OutputFigure('terminal_v1_map.png')
+    plt.cla()
+    plt.clf()
+
     # plot reference manifold
     frame_geo = pv.Plane(
             center = frame_manifold.origin,
