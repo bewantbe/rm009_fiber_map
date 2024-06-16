@@ -48,6 +48,7 @@ from neu3dviewer.data_loader import (
     LoadSWCTree,
     SplitSWCTree,
     SWCDFSSort,
+    SimplifyTreeWithDepth,
     dtype_id,
     dtype_coor,
 )
@@ -60,14 +61,19 @@ from neu3dviewer.utils import (
     VecNorm,
 )
 
+logger_m = logging.getLogger('numcodecs')
+logger_m.setLevel(logging.WARNING)
+from neu_walk import (
+    NTreeOps,
+    exec_filter_string,
+)
+
 # mostly copy from the ObjTranslator.obj_swc.LoadRawSwc 
 # in "cg_translators.py".
 def LoadRawSwc(file_path):
-    ntree = LoadSWCTree(file_path)
-    processes = SplitSWCTree(ntree)
-    ntree, processes = SWCDFSSort(ntree, processes)
+    ntree_ext = NTreeOps(file_path, sort_proc = True)
     
-    raw_points = ntree[1][:,0:3].astype(dtype_coor, copy=False)
+    raw_points = ntree_ext.ntree[1][:,0:3].astype(dtype_coor, copy=False)
 
     # extract neuron ID
     # e.g. filename "neuron#96.lyp.swc", the ID is 96
@@ -78,10 +84,12 @@ def LoadRawSwc(file_path):
         neu_id = swc_name
 
     swc_ext = Struct(
+        file_path  = file_path,
         neu_id     = neu_id,
-        ntree      = ntree,
-        processes  = processes,
-        raw_points = raw_points
+        ntree_ext  = ntree_ext,
+        ntree      = ntree_ext.ntree,
+        processes  = ntree_ext.processes,
+        raw_points = raw_points,
     )
 
     return swc_ext

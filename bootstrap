@@ -2,6 +2,8 @@ pip install trimesh pyvista
 pip install xxhash  # for trimesh
 pip install Rtree  # for trimesh contain
 
+pip install SimpleITK  # for neu_walk.py
+
 ln -s /home/xyy/Documents/SIAT_CAS/xu/tracing/swc_collect/RM009/v2024-06-14_lvl7verified/ rm009_swcs
 ln -s /home/xyy/Documents/SIAT_CAS/xu/tracing/swc_collect/RM009/mesh rm009_mesh
 
