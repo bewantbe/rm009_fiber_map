@@ -165,11 +165,12 @@ def SortSwcsList(swcs_ext):
 def CheckDuplicateName(swcs_ext):
     # https://stackoverflow.com/questions/9835762/how-do-i-find-the-duplicates-in-a-list-and-create-another-list-with-them
     seen = set()
-    dupes = [x for x in swcs_a.neu_id if x in seen or seen.add(x)]
+    dupes = [x for x in swcs_ext.neu_id if x in seen or seen.add(x)]
     if len(dupes) > 0:
         logger.error('Duplication found!')
 
 def LoadLGNMesh():
+    """ load LGN mesh, 0:LGN, 1-6:LGN layers 1-6 """
     mesh_dir = './rm009_mesh/region/LGN/LGN_Layers/'
     mesh_fn_list = ['../LGNright120.obj', 'lgn_1.obj', 'lgn_2.obj', 'lgn_3.obj', 'lgn_4.obj', 'lgn_5.obj', 'lgn_6.obj']
     mesh_list = []
@@ -294,7 +295,7 @@ def GetV1Terminal2DMap(pos_terminal, v1_mesh):
 
     return frame_manifold, pos_terminal_2d
 
-def GetTopoMapSiteWithColor(swcs_a):
+def GetTopoMapSiteWithColor(swcs_a, soma_layer_i):
     """ get terminal points """
     tip_filter = '(path_length_to_root(leaves) > 30000) & (branch_depth(leaves) >= 5)'
     #proc_filter = '(path_length_to_root(end_point(processes)) > 30000) & (branch_depth(processes) == 7)'
@@ -489,7 +490,7 @@ def PlotInPyvista(lgn_v1_data):
 
     ## parpare V1 data
     v1_mesh = v1_s_mesh  # use simplified mesh for now
-    point_set, point_set_scalar = GetTopoMapSiteWithColor(swcs_a)
+    point_set, point_set_scalar = GetTopoMapSiteWithColor(swcs_a, soma_layer_i)
     v1_frame_manifold, pos_terminal_2d = GetV1Terminal2DMap(point_set, v1_mesh)
     
     ## Draw V1 and terminal
@@ -546,12 +547,7 @@ def DrawErwin3Views():
     else:
         logger.warning('No map rendering mode specified!')
 
-
-OutputFigure = lambda fn: plt.savefig(os.path.join('./pic', fn))
-
-if __name__ == '__main__':
-    swc_dir = './rm009_swcs'
-
+def LoadSWC(swc_dir = './rm009_swcs'):
     ## load and check SWCs
     swcs_ext = LoadSwcDir(swc_dir)
     swcs_ext = SortSwcsList(swcs_ext)
@@ -570,17 +566,23 @@ if __name__ == '__main__':
     pos_soma2 = np.array([s.ntree[1][0, 0:3] for s in swcs_a])
     assert not np.any(pos_soma2 - pos_soma)
 
-    ## load LGN mesh, 0:LGN, 1-6:LGN layers 1-6
-    lgn_mesh_s = LoadLGNMesh()
+    return swcs_a, pos_soma
+
+def GetSomaLayer(pos_soma, lgn_mesh_s):
     soma_layer_i = np.zeros(len(pos_soma), dtype=np.int32)
     for i_layer in range(len(lgn_mesh_s)):
         bidx = lgn_mesh_s[i_layer].contains(pos_soma)
         # note that we must put LGN to the first mesh,
         # to be overwritten by detailed layers
         soma_layer_i[bidx] = i_layer
+    return soma_layer_i
 
-    ## load V1 mesh
+def LoadAndAnalyze():
+    swcs_a, pos_soma = LoadSWC()
+    lgn_mesh_s = LoadLGNMesh()
     v1_mesh, v1_s_mesh = LoadV1Mesh()
+
+    soma_layer_i = GetSomaLayer(pos_soma, lgn_mesh_s)
 
     lgn_v1_data = Struct(
         swcs_a = swcs_a,
@@ -590,6 +592,12 @@ if __name__ == '__main__':
         v1_mesh = v1_mesh,
         v1_s_mesh = v1_s_mesh
     )
+    return lgn_v1_data
+
+OutputFigure = lambda fn: plt.savefig(os.path.join('./pic', fn))
+
+if __name__ == '__main__':
+    lgn_v1_data = LoadAndAnalyze()
 
     ## plat soma with LGN mesh
     plot_mode = 'pyvista'
@@ -599,7 +607,3 @@ if __name__ == '__main__':
         PlotInPyvista(lgn_v1_data)
     else:
         pass
-
-
-
-
