@@ -186,7 +186,14 @@ def LoadV1Mesh():
     mesh_fn_path = os.path.join(mesh_dir, mesh_fn)
     mesh = trimesh.load_mesh(mesh_fn_path)
     mesh.vertices *= 10.0
-    return mesh
+
+    # simplified version
+    mesh_fn = '3_f800.obj'
+    mesh_fn_path = os.path.join(mesh_dir, mesh_fn)
+    v1_s_mesh = trimesh.load_mesh(mesh_fn_path)
+    v1_s_mesh.vertices *= 10.0
+
+    return mesh, v1_s_mesh
 
 def ShowLGNPlt(ax, show_layers = [0]):
     mesh_list = LoadLGNMesh()
@@ -309,7 +316,9 @@ def GetTopoMapSiteWithColor(swcs_a):
     point_set_scalar = np.concatenate(point_set_scalar, axis = 0)
     return point_set, point_set_scalar
 
-def PlotInMatplotlib(swcs_a, pos_soma, lgn_mesh_s, v1_mesh):
+def PlotInMatplotlib(lgn_v1_data):
+    # swcs_a, pos_soma, lgn_mesh_s, v1_mesh
+    pos_soma = lgn_v1_data.pos_soma
     # plot soma position
     plt.ion()
     fig = plt.figure(1)
@@ -447,67 +456,65 @@ def Plot2DMapWithColor(pos_2d, color_scalar, point_size, title, labels = ['x','y
     plt.title(title)
     OutputFigure(f'{title}.png')
 
-def PlotInPyvista(swcs_a, pos_soma, lgn_mesh_s, soma_layer_i, v1_mesh):
+def PlotInPyvista(lgn_v1_data):
     """Main ploting function"""
+    swcs_a       = lgn_v1_data.swcs_a
+    pos_soma     = lgn_v1_data.pos_soma
+    lgn_mesh_s   = lgn_v1_data.lgn_mesh_s
+    soma_layer_i = lgn_v1_data.soma_layer_i
+    v1_mesh      = lgn_v1_data.v1_mesh
+    v1_s_mesh    = lgn_v1_data.v1_s_mesh
 
-    ## get 2D map coordinate of soma in LGN layer(s)
-    frame_manifold, pos_soma_2d = GetLgnSoma2DMap(pos_soma, lgn_mesh_s)
+    ## Prepare LGN data
+    # get 2D map coordinate of soma in LGN layer(s)
+    lgn_frame_manifold, pos_soma_2d = GetLgnSoma2DMap(pos_soma, lgn_mesh_s)
 
+    ## Draw LGN and soma
     plotter = pv.Plotter()
     plotter.show_axes()
-
-    ## draw LGN layer mesh
+    # draw LGN layer mesh
     DrawMeshBatch(plotter, lgn_mesh_s[1:2])
-    ## draw soma
+    # draw soma
     DrawDotsWithColor(plotter, pos_soma, soma_layer_i, 20.0)
-    ## draw projecting manifold
-    DrawCoordinateFrame(plotter, frame_manifold, 0.35)
+    # draw projecting manifold
+    DrawCoordinateFrame(plotter, lgn_frame_manifold, 0.35)
     plotter.show()       # Press 'q' for quit
 
-    ## output the 2D map
+    ## output the LGN soma 2D map
     plt.figure(10)
     c = (pos_soma_2d[:, 0] - 0) * 1
     Plot2DMapWithColor(pos_soma_2d, c, 50.0, 'LGN_soma_2d_map',
                        labels=['Inclination', 'Eccentricity'])
     #plt.show()
 
-    ## draw V1 and swc terminal positions
+    ## parpare V1 data
+    v1_mesh = v1_s_mesh  # use simplified mesh for now
+    point_set, point_set_scalar = GetTopoMapSiteWithColor(swcs_a)
+    v1_frame_manifold, pos_terminal_2d = GetV1Terminal2DMap(point_set, v1_mesh)
+    
+    ## Draw V1 and terminal
     plotter = pv.Plotter()
     plotter.show_axes()
-
-    # plot V1
+    # draw V1
     #DrawMeshBatch(plotter, [v1_mesh])
-
-    # plot V1, simplified version
-    mesh_dir = './rm009_mesh/region/V1/'
-    mesh_fn = '3_f800.obj'
-    mesh_fn_path = os.path.join(mesh_dir, mesh_fn)
-    v1_s_mesh = trimesh.load_mesh(mesh_fn_path)
-    v1_s_mesh.vertices *= 10.0
     DrawMeshBatch(plotter, [v1_s_mesh])
-
-    v1_mesh = v1_s_mesh  # use simplified mesh for now
-
-    point_set, point_set_scalar = GetTopoMapSiteWithColor(swcs_a)
     # plot terminal points
     cloud = pv.PolyData(point_set)
     plotter.add_mesh(cloud, color="red", point_size = 20.0,
                      render_points_as_spheres = True)
+    # plot reference manifold
+    DrawCoordinateFrame(plotter, v1_frame_manifold, 0.35)
     # plot also LGN
     DrawMeshBatch(plotter, lgn_mesh_s[1:2])
-    
-
-    ## plot 2D map reference of V1
-    frame_manifold, pos_terminal_2d = GetV1Terminal2DMap(point_set, v1_mesh)
+    plotter.show()
     
     ## draw the 2D map
     plt.figure(20)
     Plot2DMapWithColor(pos_terminal_2d, point_set_scalar, 0.2, 'V1_term_2d_map',
                        labels=['x', 'y'])
 
-    # plot reference manifold
-    DrawCoordinateFrame(plotter, frame_manifold, 0.35)
-    plotter.show()
+def DrawErwin3Views():
+    """ Show Erwin LGN map"""
 
     ## LGN reference map
     erwin_data = ReadErwinData()
@@ -538,6 +545,7 @@ def PlotInPyvista(swcs_a, pos_soma, lgn_mesh_s, soma_layer_i, v1_mesh):
         pass
     else:
         logger.warning('No map rendering mode specified!')
+
 
 OutputFigure = lambda fn: plt.savefig(os.path.join('./pic', fn))
 
@@ -572,14 +580,23 @@ if __name__ == '__main__':
         soma_layer_i[bidx] = i_layer
 
     ## load V1 mesh
-    v1_mesh = LoadV1Mesh()
+    v1_mesh, v1_s_mesh = LoadV1Mesh()
+
+    lgn_v1_data = Struct(
+        swcs_a = swcs_a,
+        pos_soma = pos_soma,
+        lgn_mesh_s = lgn_mesh_s,
+        soma_layer_i = soma_layer_i,
+        v1_mesh = v1_mesh,
+        v1_s_mesh = v1_s_mesh
+    )
 
     ## plat soma with LGN mesh
     plot_mode = 'pyvista'
     if plot_mode == 'plt':
-        PlotInMatplotlib(swcs_a, pos_soma, lgn_mesh_s, soma_layer_i, v1_mesh)
+        PlotInMatplotlib(lgn_v1_data)
     elif plot_mode == 'pyvista':
-        PlotInPyvista(swcs_a, pos_soma, lgn_mesh_s, soma_layer_i, v1_mesh)
+        PlotInPyvista(lgn_v1_data)
     else:
         pass
 
