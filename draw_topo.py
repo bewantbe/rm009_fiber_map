@@ -196,7 +196,7 @@ def ShowLGNPlt(ax, show_layers = [0]):
         ax.plot_trisurf(x, y, z, triangles=mesh.faces,
             color='grey', alpha=0.1)
 
-def ShowMeshBatch(plotter, mesh_list):
+def DrawMeshBatch(plotter, mesh_list):
     for mesh in mesh_list:
         pv_mesh = pv.PolyData(mesh.vertices,
                     np.c_[[[3]]*len(mesh.faces),mesh.faces])
@@ -209,11 +209,12 @@ def Normalize(vector):
         return vector  # Return the original vector if its norm is 0
     return vector / norm
 
-def ProjectNormal(vec, normal):
+def ProjectionResidual(vec, normal):
+    # normal: normal of the (hyper-)plane
     normal = Normalize(normal)
     return vec - np.dot(vec, normal) * normal
 
-def GetLgnSoma2DCoordinate(pos_soma, lgn_mesh_list):
+def GetLgnSoma2DMap(pos_soma, lgn_mesh_list):
     # define manifold that represent projected layer of a LGN layer
     # for simplicity, here use a planer mesh
     idx_layer = 3
@@ -222,7 +223,7 @@ def GetLgnSoma2DCoordinate(pos_soma, lgn_mesh_list):
     # define coordinate frame at the origin of the manifold (plane)
     origin_normal = Normalize(np.array([-0.7, 1, 0.9]))
     origin_x_direction = np.array([1, 0, -0.3])
-    origin_x_direction = Normalize(ProjectNormal(origin_x_direction, origin_normal))
+    origin_x_direction = Normalize(ProjectionResidual(origin_x_direction, origin_normal))
     origin_y_direction = np.cross(origin_normal, origin_x_direction)
     # get projection of the soma position on the manifold
     pos_soma_2d = (pos_soma - origin_pos).dot(
@@ -240,7 +241,7 @@ def GetLgnSoma2DCoordinate(pos_soma, lgn_mesh_list):
 
     return frame_manifold, pos_soma_2d
 
-def GetV1Terminal2DCoordinate(pos_terminal, v1_mesh):
+def GetV1Terminal2DMap(pos_terminal, v1_mesh):
     # define manifold that represent projected layer of a LGN layer
     # for simplicity, here use a planer mesh
     idx_layer = 3
@@ -285,6 +286,28 @@ def GetV1Terminal2DCoordinate(pos_terminal, v1_mesh):
     )
 
     return frame_manifold, pos_terminal_2d
+
+def GetTopoMapSiteWithColor(swcs_a):
+    """ get terminal points """
+    tip_filter = '(path_length_to_root(leaves) > 30000) & (branch_depth(leaves) >= 5)'
+    #proc_filter = '(path_length_to_root(end_point(processes)) > 30000) & (branch_depth(processes) == 7)'
+    point_set = []
+    point_set_scalar = []
+    for j, ntr in enumerate(swcs_a.ntree_ext):
+        b_leaves = exec_filter_string(tip_filter, ntr)
+        pos = ntr.position_of_node(ntr.leaves[b_leaves])
+        #b_proc = exec_filter_string(proc_filter, ntr)
+        #pos = ntr.position_of_node(ntr.end_point(ntr.processes)[b_proc])
+        point_set.append(pos)
+        #c = (pos_soma_2d[j, 0] - 0) * 1
+        ll = soma_layer_i[j]
+        c = 1 * ((ll == 6) | (ll == 4) | (ll == 1)) + np.random.rand() * 0.01
+        point_set_scalar.append(np.ones(len(pos)) * c)
+        #bidx = v1_mesh.contains(pos)   # very slow, >1 hours
+        #point_set.append(pos[bidx])
+    point_set = np.concatenate(point_set, axis = 0)
+    point_set_scalar = np.concatenate(point_set_scalar, axis = 0)
+    return point_set, point_set_scalar
 
 def PlotInMatplotlib(swcs_a, pos_soma, lgn_mesh_s, v1_mesh):
     # plot soma position
@@ -344,13 +367,34 @@ def ReadErwinData():
     )
     return erwin_data
 
-def PlotInPyvista(swcs_a, pos_soma, lgn_mesh_s, soma_layer_i, v1_mesh):
-    """Main ploting function"""
-    plotter = pv.Plotter()
+def PlotErwinData(erwin_data, ml_idx = 120, ap_idx = 120):
+    plt.figure(30)
+    plt.imshow(erwin_data.ecc[ml_idx, :, :])
+    plt.colorbar()
+    plt.title(f'eccentricity, medial-lateral idx={ml_idx}')
+    plt.xlabel('anterior-posterior')
+    plt.ylabel('dorsal-ventral')
+    OutputFigure(f'erwin_ecc_map_ml{ml_idx}.png')
 
-    ## plot soma
-    cloud = pv.PolyData(pos_soma)
-    cloud['layer'] = soma_layer_i
+    plt.figure(31)
+    plt.imshow(erwin_data.ecc[:, :, ap_idx])
+    plt.colorbar()
+    plt.title(f'inclination, anterior-posterior idx={ap_idx}')
+    plt.xlabel('medial-lateral')
+    plt.ylabel('dorsal-ventral')
+    OutputFigure(f'erwin_ecc_map_ap{ap_idx}.png')
+
+    plt.figure(32)
+    plt.imshow(erwin_data.layers[:, :, ap_idx])
+    plt.colorbar()
+    plt.title(f'laminar type, anterior-posterior idx={ap_idx}')
+    plt.xlabel('medial-lateral')
+    plt.ylabel('dorsal-ventral')
+    OutputFigure(f'erwin_layers_map_ap{ap_idx}.png')
+
+def DrawDotsWithColor(plotter, pos, color_scalar, point_size):
+    cloud = pv.PolyData(pos)
+    cloud['color_scalar'] = color_scalar
     cmap = matplotlib.colormaps['Paired']
     cmap = matplotlib.colors.ListedColormap(cmap.colors[:7])
     sargs = dict(
@@ -362,32 +406,12 @@ def PlotInPyvista(swcs_a, pos_soma, lgn_mesh_s, soma_layer_i, v1_mesh):
         fmt="%.1g",
         font_family="arial",
     )
-    plotter.add_mesh(cloud, color="red", point_size = 20.0,
+    plotter.add_mesh(cloud, color="red", point_size = point_size,
                     render_points_as_spheres = True,
-                    scalars = 'layer', clim = [0, 6.1],
+                    scalars = 'color_scalar', clim = [0, 6.1],
                     cmap = cmap, scalar_bar_args=sargs)
 
-    ## plot LGN layer mesh
-    ShowMeshBatch(plotter, lgn_mesh_s[1:2])
-    plotter.show_axes()
-
-    ## plot 2D map reference of LGN layer(s)
-    frame_manifold, pos_soma_2d = GetLgnSoma2DCoordinate(pos_soma, lgn_mesh_s)
-
-    ## draw the 2D map
-    plt.figure(10)
-    #plt.plot(pos_soma_2d[:, 0], pos_soma_2d[:, 1], 'o')
-    c = (pos_soma_2d[:, 0] - 0) * 1
-    plt.scatter(pos_soma_2d[:, 0], pos_soma_2d[:, 1],
-                c=c, cmap='viridis', s = 50)
-    plt.xlabel('Inclination')
-    plt.ylabel('Eccentricity')
-    plt.title('LGN')
-    #plt.show()
-    OutputFigure('soma_lgn_map.png')
-    plt.cla()
-    plt.clf()
-
+def DrawCoordinateFrame(plotter, frame_manifold, arrow_scaling):
     # plot reference manifold
     frame_geo = pv.Plane(
             center = frame_manifold.origin,
@@ -396,7 +420,7 @@ def PlotInPyvista(swcs_a, pos_soma, lgn_mesh_s, soma_layer_i, v1_mesh):
             j_size = frame_manifold.y_range[1])
     plotter.add_mesh(frame_geo, opacity=0.7)
     # plot coordinate frame
-    arrow_scale = frame_manifold.x_range[1] * 0.35
+    arrow_scale = frame_manifold.x_range[1] * arrow_scaling
     frame_geo_normal = pv.Arrow(
             start = frame_manifold.origin,
             direction = frame_manifold.normal,
@@ -413,119 +437,81 @@ def PlotInPyvista(swcs_a, pos_soma, lgn_mesh_s, soma_layer_i, v1_mesh):
     plotter.add_mesh(frame_geo_x, color='red')
     plotter.add_mesh(frame_geo_y, color='green')
 
+def Plot2DMapWithColor(pos_2d, color_scalar, point_size, title, labels = ['x','y']):
+    plt.clf()
+    plt.cla()
+    plt.scatter(pos_2d[:, 0], pos_2d[:, 1],
+                c=color_scalar, cmap='viridis', s = point_size)
+    plt.xlabel(labels[0])
+    plt.ylabel(labels[1])
+    plt.title(title)
+    OutputFigure(f'{title}.png')
+
+def PlotInPyvista(swcs_a, pos_soma, lgn_mesh_s, soma_layer_i, v1_mesh):
+    """Main ploting function"""
+
+    ## get 2D map coordinate of soma in LGN layer(s)
+    frame_manifold, pos_soma_2d = GetLgnSoma2DMap(pos_soma, lgn_mesh_s)
+
+    plotter = pv.Plotter()
+    plotter.show_axes()
+
+    ## draw LGN layer mesh
+    DrawMeshBatch(plotter, lgn_mesh_s[1:2])
+    ## draw soma
+    DrawDotsWithColor(plotter, pos_soma, soma_layer_i, 20.0)
+    ## draw projecting manifold
+    DrawCoordinateFrame(plotter, frame_manifold, 0.35)
     plotter.show()       # Press 'q' for quit
 
-    ## plot V1 and swc terminal positions
-    plotter = pv.Plotter()
-    # plot V1
-    #ShowMeshBatch(plotter, [v1_mesh])
+    ## output the 2D map
+    plt.figure(10)
+    c = (pos_soma_2d[:, 0] - 0) * 1
+    Plot2DMapWithColor(pos_soma_2d, c, 50.0, 'LGN_soma_2d_map',
+                       labels=['Inclination', 'Eccentricity'])
+    #plt.show()
 
+    ## draw V1 and swc terminal positions
+    plotter = pv.Plotter()
+    plotter.show_axes()
+
+    # plot V1
+    #DrawMeshBatch(plotter, [v1_mesh])
+
+    # plot V1, simplified version
     mesh_dir = './rm009_mesh/region/V1/'
     mesh_fn = '3_f800.obj'
     mesh_fn_path = os.path.join(mesh_dir, mesh_fn)
     v1_s_mesh = trimesh.load_mesh(mesh_fn_path)
     v1_s_mesh.vertices *= 10.0
-    ShowMeshBatch(plotter, [v1_s_mesh])
+    DrawMeshBatch(plotter, [v1_s_mesh])
 
     v1_mesh = v1_s_mesh  # use simplified mesh for now
 
-    # get terminal points
-    point_set = []
-    point_set_scalar = []
-    for j, ntr in enumerate(swcs_a.ntree_ext):
-        b_leaves = exec_filter_string('(path_length_to_root(leaves) > 30000) & (branch_depth(leaves) >= 5)', ntr)
-        pos = ntr.position_of_node(ntr.leaves[b_leaves])
-        #b_proc = exec_filter_string('(path_length_to_root(end_point(processes)) > 30000) & (branch_depth(processes) == 7)', ntr)
-        #pos = ntr.position_of_node(ntr.end_point(ntr.processes)[b_proc])
-        point_set.append(pos)
-        #c = (pos_soma_2d[j, 0] - 0) * 1
-        ll = soma_layer_i[j]
-        c = 1 * ((ll == 6) | (ll == 4) | (ll == 1)) + np.random.rand() * 0.01
-        point_set_scalar.append(np.ones(len(pos)) * c)
-        #bidx = v1_mesh.contains(pos)   # very slow, >1 hours
-        #point_set.append(pos[bidx])
-    point_set = np.concatenate(point_set, axis = 0)
-    point_set_scalar = np.concatenate(point_set_scalar, axis = 0)
+    point_set, point_set_scalar = GetTopoMapSiteWithColor(swcs_a)
     # plot terminal points
     cloud = pv.PolyData(point_set)
     plotter.add_mesh(cloud, color="red", point_size = 20.0,
                      render_points_as_spheres = True)
     # plot also LGN
-    ShowMeshBatch(plotter, lgn_mesh_s[1:2])
-    plotter.show_axes()
+    DrawMeshBatch(plotter, lgn_mesh_s[1:2])
     
 
     ## plot 2D map reference of V1
-    frame_manifold, pos_terminal_2d = GetV1Terminal2DCoordinate(point_set, v1_mesh)
+    frame_manifold, pos_terminal_2d = GetV1Terminal2DMap(point_set, v1_mesh)
     
     ## draw the 2D map
     plt.figure(20)
-    plt.scatter(pos_terminal_2d[:, 0], pos_terminal_2d[:, 1],
-                c = point_set_scalar, cmap='viridis', s = 0.2)
-    #plt.xlabel('Inclination (x)')
-    #plt.ylabel('Eccentricity (y)')
-    #plt.show()
-    plt.title('V1')
-    OutputFigure('terminal_v1_map.png')
-    plt.cla()
-    plt.clf()
+    Plot2DMapWithColor(pos_terminal_2d, point_set_scalar, 0.2, 'V1_term_2d_map',
+                       labels=['x', 'y'])
 
     # plot reference manifold
-    frame_geo = pv.Plane(
-            center = frame_manifold.origin,
-            direction = frame_manifold.normal,
-            i_size = frame_manifold.x_range[1],
-            j_size = frame_manifold.y_range[1])
-    plotter.add_mesh(frame_geo, opacity=0.7)
-    # plot coordinate frame
-    arrow_scale = frame_manifold.x_range[1] * 0.35
-    frame_geo_normal = pv.Arrow(
-            start = frame_manifold.origin,
-            direction = frame_manifold.normal,
-            scale = arrow_scale)
-    frame_geo_x = pv.Arrow(
-            start = frame_manifold.origin,
-            direction = frame_manifold.x_axis,
-            scale = arrow_scale)
-    frame_geo_y = pv.Arrow(
-            start = frame_manifold.origin,
-            direction = frame_manifold.y_axis,
-            scale = arrow_scale)
-    plotter.add_mesh(frame_geo_normal, color='blue')
-    plotter.add_mesh(frame_geo_x, color='red')
-    plotter.add_mesh(frame_geo_y, color='green')
-
+    DrawCoordinateFrame(plotter, frame_manifold, 0.35)
     plotter.show()
 
     ## LGN reference map
     erwin_data = ReadErwinData()
-
-    ml_idx = 120
-    plt.figure(10)
-    plt.imshow(erwin_data.ecc[ml_idx, :, :])
-    plt.colorbar()
-    plt.title(f'eccentricity, medial-lateral idx={ml_idx}')
-    plt.xlabel('anterior-posterior')
-    plt.ylabel('dorsal-ventral')
-    OutputFigure(f'ecc_map_ml{ml_idx}.png')
-
-    ap_idx = 120
-    plt.figure(11)
-    plt.imshow(erwin_data.ecc[:, :, ap_idx])
-    plt.colorbar()
-    plt.title(f'inclination, anterior-posterior idx={ap_idx}')
-    plt.xlabel('medial-lateral')
-    plt.ylabel('dorsal-ventral')
-    OutputFigure(f'ecc_map_ap{ap_idx}.png')
-
-    ap_idx = 120
-    plt.figure(21)
-    plt.imshow(erwin_data.layers[:, :, ap_idx])
-    plt.colorbar()
-    plt.title(f'laminar type, anterior-posterior idx={ap_idx}')
-    plt.xlabel('medial-lateral')
-    plt.ylabel('dorsal-ventral')
-    OutputFigure(f'layers_map_ap{ap_idx}.png')
+    PlotErwinData(erwin_data)
 
     # TODO:  we need to plot 3D map in 2D with a slider for slicing
     # maybe use pyvista or PyQtGraph
