@@ -465,10 +465,14 @@ def PlotInPyvista(lgn_v1_data):
     soma_layer_i = lgn_v1_data.soma_layer_i
     v1_mesh      = lgn_v1_data.v1_mesh
     v1_s_mesh    = lgn_v1_data.v1_s_mesh
-
-    ## Prepare LGN data
-    # get 2D map coordinate of soma in LGN layer(s)
-    lgn_frame_manifold, pos_soma_2d = GetLgnSoma2DMap(pos_soma, lgn_mesh_s)
+    # LGN
+    lgn_frame_manifold = lgn_v1_data.lgn_frame_manifold
+    pos_soma_2d        = lgn_v1_data.pos_soma_2d
+    # V1
+    point_set         = lgn_v1_data.point_set
+    point_set_scalar  = lgn_v1_data.point_set_scalar
+    v1_frame_manifold = lgn_v1_data.v1_frame_manifold
+    pos_terminal_2d   = lgn_v1_data.pos_terminal_2d
 
     ## Draw LGN and soma
     plotter = pv.Plotter()
@@ -488,17 +492,12 @@ def PlotInPyvista(lgn_v1_data):
                        labels=['Inclination', 'Eccentricity'])
     #plt.show()
 
-    ## parpare V1 data
-    v1_mesh = v1_s_mesh  # use simplified mesh for now
-    point_set, point_set_scalar = GetTopoMapSiteWithColor(swcs_a, soma_layer_i)
-    v1_frame_manifold, pos_terminal_2d = GetV1Terminal2DMap(point_set, v1_mesh)
-    
     ## Draw V1 and terminal
     plotter = pv.Plotter()
     plotter.show_axes()
     # draw V1
     #DrawMeshBatch(plotter, [v1_mesh])
-    DrawMeshBatch(plotter, [v1_s_mesh])
+    DrawMeshBatch(plotter, [v1_s_mesh])  # use simplified mesh for now
     # plot terminal points
     cloud = pv.PolyData(point_set)
     plotter.add_mesh(cloud, color="red", point_size = 20.0,
@@ -584,13 +583,29 @@ def LoadAndAnalyze():
 
     soma_layer_i = GetSomaLayer(pos_soma, lgn_mesh_s)
 
+    ## Prepare LGN data
+    # get 2D map coordinate of soma in LGN layer(s)
+    lgn_frame_manifold, pos_soma_2d = GetLgnSoma2DMap(pos_soma, lgn_mesh_s)
+
+    ## parpare V1 data
+    point_set, point_set_scalar = GetTopoMapSiteWithColor(swcs_a, soma_layer_i)
+    v1_frame_manifold, pos_terminal_2d = GetV1Terminal2DMap(point_set, v1_mesh)
+    
     lgn_v1_data = Struct(
         swcs_a = swcs_a,
-        pos_soma = pos_soma,
         lgn_mesh_s = lgn_mesh_s,
+        v1_mesh   = v1_mesh,
+        v1_s_mesh = v1_s_mesh,
+        # LGN
+        pos_soma     = pos_soma,
         soma_layer_i = soma_layer_i,
-        v1_mesh = v1_mesh,
-        v1_s_mesh = v1_s_mesh
+        lgn_frame_manifold = lgn_frame_manifold,
+        pos_soma_2d = pos_soma_2d,
+        # V1
+        point_set = point_set,
+        point_set_scalar = point_set_scalar,
+        v1_frame_manifold = v1_frame_manifold,
+        pos_terminal_2d = pos_terminal_2d,
     )
     return lgn_v1_data
 
