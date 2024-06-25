@@ -388,7 +388,7 @@ def PlotErwinData(erwin_data, ml_idx = 120, ap_idx = 120):
     plt.title(f'eccentricity, medial-lateral idx={ml_idx}')
     plt.xlabel('anterior-posterior')
     plt.ylabel('dorsal-ventral')
-    OutputFigure(f'erwin_ecc_map_ml{ml_idx}.png')
+    SaveCurrentFigure(f'erwin_ecc_map_ml{ml_idx}.png')
 
     plt.figure(31)
     plt.imshow(erwin_data.ecc[:, :, ap_idx])
@@ -396,7 +396,7 @@ def PlotErwinData(erwin_data, ml_idx = 120, ap_idx = 120):
     plt.title(f'inclination, anterior-posterior idx={ap_idx}')
     plt.xlabel('medial-lateral')
     plt.ylabel('dorsal-ventral')
-    OutputFigure(f'erwin_ecc_map_ap{ap_idx}.png')
+    SaveCurrentFigure(f'erwin_ecc_map_ap{ap_idx}.png')
 
     plt.figure(32)
     plt.imshow(erwin_data.layers[:, :, ap_idx])
@@ -404,7 +404,7 @@ def PlotErwinData(erwin_data, ml_idx = 120, ap_idx = 120):
     plt.title(f'laminar type, anterior-posterior idx={ap_idx}')
     plt.xlabel('medial-lateral')
     plt.ylabel('dorsal-ventral')
-    OutputFigure(f'erwin_layers_map_ap{ap_idx}.png')
+    SaveCurrentFigure(f'erwin_layers_map_ap{ap_idx}.png')
 
 def DrawDotsWithColor(plotter, pos, color_scalar, point_size):
     cloud = pv.PolyData(pos)
@@ -459,7 +459,7 @@ def Plot2DMapWithColor(pos_2d, color_scalar, point_size, title, labels = ['x','y
     plt.xlabel(labels[0])
     plt.ylabel(labels[1])
     plt.title(title)
-    OutputFigure(f'{title}.png')
+    SaveCurrentFigure(f'{title}.png')
 
 def GetColorScalarArray(lgn_v1_data, color_mode):
     """ return color scalar array and color map. """
@@ -512,19 +512,6 @@ def PlotInPyvista(lgn_v1_data):
     DrawCoordinateFrame(plotter, lgn_frame_manifold, 0.35)
     plotter.show()       # Press 'q' for quit
 
-    ## output the LGN soma 2D map
-    # x
-    plt.figure(10)
-    c = GetColorScalarArray(lgn_v1_data, 'lgn_x')
-    Plot2DMapWithColor(pos_soma_2d, c, 50.0, 'LGN_soma_2d_map_x',
-                       labels=['Inclination', 'Eccentricity'])
-    # y
-    plt.figure(11)
-    c = GetColorScalarArray(lgn_v1_data, 'lgn_y')
-    Plot2DMapWithColor(pos_soma_2d, c, 50.0, 'LGN_soma_2d_map_y',
-                       labels=['Inclination', 'Eccentricity'])
-    #plt.show()
-
     ## Draw V1 and terminal
     plotter = pv.Plotter()
     plotter.show_axes()
@@ -540,26 +527,6 @@ def PlotInPyvista(lgn_v1_data):
     # plot also LGN
     DrawMeshBatch(plotter, lgn_mesh_s[1:2])
     plotter.show()
-    
-    ## draw the 2D map
-    # lgn x
-    plt.figure(20)
-    c = GetColorScalarArray(lgn_v1_data, 'lgn_x')
-    terminal_segment_color = GetTerminalColorScalar(terminal_segment_len, c)
-    Plot2DMapWithColor(pos_terminal_2d, terminal_segment_color, 0.2, 'V1_term_2d_map_lgn_x',
-                       labels=['x', 'y'])
-    # lgn y
-    plt.figure(21)
-    c = GetColorScalarArray(lgn_v1_data, 'lgn_y')
-    terminal_segment_color = GetTerminalColorScalar(terminal_segment_len, c)
-    Plot2DMapWithColor(pos_terminal_2d, terminal_segment_color, 0.2, 'V1_term_2d_map_lgn_y',
-                       labels=['x', 'y'])
-    # lgn left-right eye
-    plt.figure(22)
-    c = GetColorScalarArray(lgn_v1_data, 'left_right_eye')
-    terminal_segment_color = GetTerminalColorScalar(terminal_segment_len, c)
-    Plot2DMapWithColor(pos_terminal_2d, terminal_segment_color, 0.2, 'V1_term_2d_map_left_right_eye',
-                       labels=['x', 'y'])
 
 def DrawErwin3Views():
     """ Show Erwin LGN map"""
@@ -657,16 +624,61 @@ def LoadAndAnalyze():
     )
     return lgn_v1_data
 
-OutputFigure = lambda fn: plt.savefig(os.path.join('./pic', fn))
+SaveCurrentFigure = lambda fn: plt.savefig(os.path.join('./pic', fn))
+
+def GenerateFigures(lgn_v1_data):
+    # LGN
+    pos_soma_2d  = lgn_v1_data.pos_soma_2d
+    # V1
+    terminal_segment_len  = lgn_v1_data.terminal_segment_len
+    pos_terminal_2d       = lgn_v1_data.pos_terminal_2d
+    
+    ## output the LGN soma 2D map
+    # x
+    plt.figure(10)
+    c = GetColorScalarArray(lgn_v1_data, 'lgn_x')
+    Plot2DMapWithColor(pos_soma_2d, c, 50.0, 'LGN_soma_2d_map_x',
+                       labels=['Inclination', 'Eccentricity'])
+    # y
+    plt.figure(11)
+    c = GetColorScalarArray(lgn_v1_data, 'lgn_y')
+    Plot2DMapWithColor(pos_soma_2d, c, 50.0, 'LGN_soma_2d_map_y',
+                       labels=['Inclination', 'Eccentricity'])
+    #plt.show()
+
+    ## draw the 2D map
+    # lgn x
+    plt.figure(20)
+    c = GetColorScalarArray(lgn_v1_data, 'lgn_x')
+    terminal_segment_color = GetTerminalColorScalar(terminal_segment_len, c)
+    Plot2DMapWithColor(pos_terminal_2d, terminal_segment_color, 0.2, 'V1_term_2d_map_lgn_x',
+                       labels=['x', 'y'])
+    # lgn y
+    plt.figure(21)
+    c = GetColorScalarArray(lgn_v1_data, 'lgn_y')
+    terminal_segment_color = GetTerminalColorScalar(terminal_segment_len, c)
+    Plot2DMapWithColor(pos_terminal_2d, terminal_segment_color, 0.2, 'V1_term_2d_map_lgn_y',
+                       labels=['x', 'y'])
+    # lgn left-right eye
+    plt.figure(22)
+    c = GetColorScalarArray(lgn_v1_data, 'left_right_eye')
+    terminal_segment_color = GetTerminalColorScalar(terminal_segment_len, c)
+    Plot2DMapWithColor(pos_terminal_2d, terminal_segment_color, 0.2, 'V1_term_2d_map_left_right_eye',
+                       labels=['x', 'y'])
 
 if __name__ == '__main__':
+    if len(sys.argv) > 1:
+        plot_mode = sys.argv[1]
+    else:
+        plot_mode = 'output_figure'
+
     lgn_v1_data = LoadAndAnalyze()
 
-    ## plat soma with LGN mesh
-    plot_mode = 'pyvista'
     if plot_mode == 'plt':
         PlotInMatplotlib(lgn_v1_data)
     elif plot_mode == 'pyvista':
         PlotInPyvista(lgn_v1_data)
+    elif plot_mode == 'output_figure':
+        GenerateFigures(lgn_v1_data)
     else:
         pass
