@@ -1,4 +1,4 @@
-# draw topological map
+# Draw topological map for LGN-V1 tracing
 
 import os
 import sys
@@ -672,7 +672,8 @@ if __name__ == '__main__':
     else:
         plot_mode = 'output_figure'
 
-    lgn_v1_data = LoadAndAnalyze()
+    if plot_mode != 'erwin':
+        lgn_v1_data = LoadAndAnalyze()
 
     if plot_mode == 'plt':
         PlotInMatplotlib(lgn_v1_data)
@@ -680,5 +681,7 @@ if __name__ == '__main__':
         PlotInPyvista(lgn_v1_data)
     elif plot_mode == 'output_figure':
         GenerateFigures(lgn_v1_data)
+    elif plot_mode == 'erwin':
+        DrawErwin3Views()
     else:
-        pass
+        raise ValueError(f'Unknown plot mode: {plot_mode}')
