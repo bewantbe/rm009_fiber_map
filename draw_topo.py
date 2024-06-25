@@ -295,27 +295,31 @@ def GetV1Terminal2DMap(pos_terminal, v1_mesh):
 
     return frame_manifold, pos_terminal_2d
 
-def GetTopoMapSiteWithColor(swcs_a, soma_layer_i):
+def GetTopoMapSiteWithColor(swcs_a, color_scalar):
     """ get terminal points """
     tip_filter = '(path_length_to_root(leaves) > 30000) & (branch_depth(leaves) >= 5)'
     #proc_filter = '(path_length_to_root(end_point(processes)) > 30000) & (branch_depth(processes) == 7)'
-    point_set = []
-    point_set_scalar = []
+    terminal_set = []
+    terminal_segment_len = np.zeros(len(swcs_a.ntree_ext), dtype = np.int32)
     for j, ntr in enumerate(swcs_a.ntree_ext):
         b_leaves = exec_filter_string(tip_filter, ntr)
         pos = ntr.position_of_node(ntr.leaves[b_leaves])
         #b_proc = exec_filter_string(proc_filter, ntr)
         #pos = ntr.position_of_node(ntr.end_point(ntr.processes)[b_proc])
-        point_set.append(pos)
-        #c = (pos_soma_2d[j, 0] - 0) * 1
-        ll = soma_layer_i[j]
-        c = 1 * ((ll == 6) | (ll == 4) | (ll == 1)) + np.random.rand() * 0.01
-        point_set_scalar.append(np.ones(len(pos)) * c)
+        terminal_set.append(pos)
+        terminal_segment_len[j] = len(pos)
         #bidx = v1_mesh.contains(pos)   # very slow, >1 hours
-        #point_set.append(pos[bidx])
-    point_set = np.concatenate(point_set, axis = 0)
-    point_set_scalar = np.concatenate(point_set_scalar, axis = 0)
-    return point_set, point_set_scalar
+        #terminal_set.append(pos[bidx])
+    terminal_set = np.concatenate(terminal_set, axis = 0)
+    return terminal_set, terminal_segment_len
+
+def GetTerminalColorScalar(terminal_segment_len, color_scalar):
+    """ Used with GetTopoMapSiteWithColor() """
+    #terminal_color_scalar = np.concatenate(
+    #    [np.full(l, v) for l, v in zip(terminal_segment_len, color_scalar)]
+    #)
+    terminal_color_scalar = np.repeat(color_scalar, terminal_segment_len)
+    return terminal_color_scalar
 
 def PlotInMatplotlib(lgn_v1_data):
     # swcs_a, pos_soma, lgn_mesh_s, v1_mesh
@@ -457,20 +461,43 @@ def Plot2DMapWithColor(pos_2d, color_scalar, point_size, title, labels = ['x','y
     plt.title(title)
     OutputFigure(f'{title}.png')
 
+def GetColorScalarArray(lgn_v1_data, color_mode):
+    """ return color scalar array and color map. """
+    soma_layer_i = lgn_v1_data.soma_layer_i
+    pos_soma_2d = lgn_v1_data.pos_soma_2d
+
+    if color_mode == 'layer':
+        color_scalar = soma_layer_i
+    elif color_mode == 'lgn_x':
+        color_scalar = (pos_soma_2d[:, 0] - 0) * 1
+    elif color_mode == 'lgn_y':
+        color_scalar = (pos_soma_2d[:, 1] - 0) * 1
+    elif color_mode == 'lgn_xy':
+        color_scalar = np.vstack((pos_soma_2d[:, 0] - 0) * 1,
+                                 (pos_soma_2d[:, 1] - 0) * 1).T
+    elif color_mode == 'left_right_eye':
+        ll = soma_layer_i
+        bias = np.random.rand(len(ll)) * 0.01
+        color_scalar = 1 * ((ll == 6) | (ll == 4) | (ll == 1)) + bias
+    elif color_mode == 'fiber_len':
+        color_scalar = [] # tree or processes length in total
+    
+    return color_scalar
+
 def PlotInPyvista(lgn_v1_data):
     """Main ploting function"""
     swcs_a       = lgn_v1_data.swcs_a
-    pos_soma     = lgn_v1_data.pos_soma
     lgn_mesh_s   = lgn_v1_data.lgn_mesh_s
-    soma_layer_i = lgn_v1_data.soma_layer_i
     v1_mesh      = lgn_v1_data.v1_mesh
     v1_s_mesh    = lgn_v1_data.v1_s_mesh
     # LGN
+    pos_soma     = lgn_v1_data.pos_soma
+    soma_layer_i = lgn_v1_data.soma_layer_i
     lgn_frame_manifold = lgn_v1_data.lgn_frame_manifold
     pos_soma_2d        = lgn_v1_data.pos_soma_2d
     # V1
-    point_set         = lgn_v1_data.point_set
-    point_set_scalar  = lgn_v1_data.point_set_scalar
+    terminal_set          = lgn_v1_data.terminal_set
+    terminal_segment_len  = lgn_v1_data.terminal_segment_len
     v1_frame_manifold = lgn_v1_data.v1_frame_manifold
     pos_terminal_2d   = lgn_v1_data.pos_terminal_2d
 
@@ -486,9 +513,15 @@ def PlotInPyvista(lgn_v1_data):
     plotter.show()       # Press 'q' for quit
 
     ## output the LGN soma 2D map
+    # x
     plt.figure(10)
-    c = (pos_soma_2d[:, 0] - 0) * 1
-    Plot2DMapWithColor(pos_soma_2d, c, 50.0, 'LGN_soma_2d_map',
+    c = GetColorScalarArray(lgn_v1_data, 'lgn_x')
+    Plot2DMapWithColor(pos_soma_2d, c, 50.0, 'LGN_soma_2d_map_x',
+                       labels=['Inclination', 'Eccentricity'])
+    # y
+    plt.figure(11)
+    c = GetColorScalarArray(lgn_v1_data, 'lgn_y')
+    Plot2DMapWithColor(pos_soma_2d, c, 50.0, 'LGN_soma_2d_map_y',
                        labels=['Inclination', 'Eccentricity'])
     #plt.show()
 
@@ -499,7 +532,7 @@ def PlotInPyvista(lgn_v1_data):
     #DrawMeshBatch(plotter, [v1_mesh])
     DrawMeshBatch(plotter, [v1_s_mesh])  # use simplified mesh for now
     # plot terminal points
-    cloud = pv.PolyData(point_set)
+    cloud = pv.PolyData(terminal_set)
     plotter.add_mesh(cloud, color="red", point_size = 20.0,
                      render_points_as_spheres = True)
     # plot reference manifold
@@ -509,8 +542,23 @@ def PlotInPyvista(lgn_v1_data):
     plotter.show()
     
     ## draw the 2D map
+    # lgn x
     plt.figure(20)
-    Plot2DMapWithColor(pos_terminal_2d, point_set_scalar, 0.2, 'V1_term_2d_map',
+    c = GetColorScalarArray(lgn_v1_data, 'lgn_x')
+    terminal_segment_color = GetTerminalColorScalar(terminal_segment_len, c)
+    Plot2DMapWithColor(pos_terminal_2d, terminal_segment_color, 0.2, 'V1_term_2d_map_lgn_x',
+                       labels=['x', 'y'])
+    # lgn y
+    plt.figure(21)
+    c = GetColorScalarArray(lgn_v1_data, 'lgn_y')
+    terminal_segment_color = GetTerminalColorScalar(terminal_segment_len, c)
+    Plot2DMapWithColor(pos_terminal_2d, terminal_segment_color, 0.2, 'V1_term_2d_map_lgn_y',
+                       labels=['x', 'y'])
+    # lgn left-right eye
+    plt.figure(22)
+    c = GetColorScalarArray(lgn_v1_data, 'left_right_eye')
+    terminal_segment_color = GetTerminalColorScalar(terminal_segment_len, c)
+    Plot2DMapWithColor(pos_terminal_2d, terminal_segment_color, 0.2, 'V1_term_2d_map_left_right_eye',
                        labels=['x', 'y'])
 
 def DrawErwin3Views():
@@ -588,8 +636,8 @@ def LoadAndAnalyze():
     lgn_frame_manifold, pos_soma_2d = GetLgnSoma2DMap(pos_soma, lgn_mesh_s)
 
     ## parpare V1 data
-    point_set, point_set_scalar = GetTopoMapSiteWithColor(swcs_a, soma_layer_i)
-    v1_frame_manifold, pos_terminal_2d = GetV1Terminal2DMap(point_set, v1_mesh)
+    terminal_set, terminal_segment_len = GetTopoMapSiteWithColor(swcs_a, soma_layer_i)
+    v1_frame_manifold, pos_terminal_2d = GetV1Terminal2DMap(terminal_set, v1_mesh)
     
     lgn_v1_data = Struct(
         swcs_a = swcs_a,
@@ -602,8 +650,8 @@ def LoadAndAnalyze():
         lgn_frame_manifold = lgn_frame_manifold,
         pos_soma_2d = pos_soma_2d,
         # V1
-        point_set = point_set,
-        point_set_scalar = point_set_scalar,
+        terminal_set = terminal_set,
+        terminal_segment_len = terminal_segment_len,
         v1_frame_manifold = v1_frame_manifold,
         pos_terminal_2d = pos_terminal_2d,
     )
