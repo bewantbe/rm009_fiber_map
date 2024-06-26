@@ -102,17 +102,18 @@ def BatchLoadSwc(swc_pathes):
     return results
 
 def is_interactive():
-    #try:
-    #    shell = get_ipython().__class__.__name__
-    #    if shell == 'ZMQInteractiveShell':
-    #        return True   # Jupyter notebook or qtconsole
-    #    elif shell == 'TerminalInteractiveShell':
-    #        return False  # Terminal running IPython
-    #    else:
-    #        return False  # Other type (?)
-    #except NameError:
-    #    return False      # Probably standard Python interpreter
-    return hasattr(__builtins__,'__IPYTHON__')
+    try:
+        shell = get_ipython().__class__.__name__
+        if shell == 'ZMQInteractiveShell':
+            return True   # Jupyter notebook or qtconsole
+        elif shell == 'TerminalInteractiveShell':
+            return True  # Terminal running IPython
+        else:
+            return False  # Other type (?)
+    except NameError:
+        return False      # Probably standard Python interpreter
+    #return hasattr(__builtins__,'__IPYTHON__')
+    #return True
 
 def LoadSwcDir(swc_dir, parallel_lib = 'auto'):
     if not os.path.isdir(swc_dir):
@@ -305,6 +306,20 @@ def GetTerminalColorScalar(terminal_segment_len, color_scalar):
     #)
     terminal_color_scalar = np.repeat(color_scalar, terminal_segment_len)
     return terminal_color_scalar
+
+def GetTerminalStat(pos_terminal_2d, terminal_segment_len):
+    import warnings
+    l = len(terminal_segment_len)
+    terminal_centers = np.zeros((l, 2))
+    rg = np.cumsum(np.hstack([0, terminal_segment_len]))
+    with np.errstate(divide='ignore', invalid='ignore'):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            # if empty, output nan, without warning
+            for k in range(l):
+                pos = np.mean(pos_terminal_2d[rg[k]:rg[k+1], :], axis = 0)
+                terminal_centers[k] = pos
+    return terminal_centers
 
 def LoadSWC(swc_dir = './rm009_swcs'):
     ## load and check SWCs
@@ -549,10 +564,17 @@ def DrawCoordinateFrame(plotter, frame_manifold, arrow_scaling):
     plotter.add_mesh(frame_geo_y, color='green')
 
 def Plot2DMapWithColor(pos_2d, color_scalar, point_size, title, labels = ['x','y']):
-    plt.clf()
-    plt.cla()
-    plt.scatter(pos_2d[:, 0], pos_2d[:, 1],
-                c=color_scalar, cmap='viridis', s = point_size)
+    X = pos_2d[:, 0]
+    Y = pos_2d[:, 1]
+    if len(color_scalar.shape) == 2:
+        c = color_scalar[:, 0]
+        d = color_scalar[:, 1]
+        dx, dy = np.cos(d), np.sin(d)
+        plt.quiver(X, Y, dx, dy, headlength=3.0)
+    else:
+        c = color_scalar
+    plt.scatter(X, Y,
+                c=c, cmap='viridis', s = point_size)
     plt.xlabel(labels[0])
     plt.ylabel(labels[1])
     plt.title(title)
@@ -578,8 +600,15 @@ def GetColorScalarArray(lgn_v1_data, color_mode):
     elif color_mode == 'lgn_y':
         color_scalar = (pos_soma_2d[:, 1] - 0) * 1
     elif color_mode == 'lgn_xy':
-        color_scalar = np.vstack((pos_soma_2d[:, 0] - 0) * 1,
-                                 (pos_soma_2d[:, 1] - 0) * 1).T
+        c1 = (pos_soma_2d[:, 0] - 0) * 1
+        c2 = (pos_soma_2d[:, 1] - 0) * 1
+        c2 = ((c2 - c2.min()) / (c2.max() - c2.min()) - 0.5) * np.pi
+        color_scalar = np.vstack([c1, c2]).T
+    elif color_mode == 'lgn_yx':
+        c1 = (pos_soma_2d[:, 0] - 0) * 1
+        c2 = (pos_soma_2d[:, 1] - 0) * 1
+        c1 = ((c1 - c1.min()) / (c1.max() - c1.min())-0.5) * np.pi
+        color_scalar = np.vstack([c2, c1]).T
     elif color_mode == 'left_right_eye':
         ll = soma_layer_i
         bias = np.random.rand(len(ll)) * 0.01
@@ -633,7 +662,7 @@ def PlotInPyvista(lgn_v1_data):
     DrawMeshBatch(plotter, lgn_mesh_s[1:2])
     plotter.show()
 
-SaveCurrentFigure = lambda fn: plt.savefig(os.path.join('./pic', fn))
+SaveCurrentFigure = lambda fn: plt.savefig(os.path.join('./pic', fn), dpi=300)
 
 def GenerateFigures(lgn_v1_data):
     # LGN
@@ -656,28 +685,30 @@ def GenerateFigures(lgn_v1_data):
     #plt.show()
 
     ## draw the 2D map
-    # lgn x
+    # V1 by lgn x
     plt.figure(20)
     c = GetColorScalarArray(lgn_v1_data, 'lgn_x')
     terminal_segment_color = GetTerminalColorScalar(terminal_segment_len, c)
     Plot2DMapWithColor(pos_terminal_2d, terminal_segment_color, 0.2, 'V1_term_2d_map_lgn_x',
                        labels=['x', 'y'])
-    # lgn y
+    # V1 by lgn y
     plt.figure(21)
     c = GetColorScalarArray(lgn_v1_data, 'lgn_y')
     terminal_segment_color = GetTerminalColorScalar(terminal_segment_len, c)
     Plot2DMapWithColor(pos_terminal_2d, terminal_segment_color, 0.2, 'V1_term_2d_map_lgn_y',
                        labels=['x', 'y'])
-    # lgn left-right eye
+    # V1 by lgn left-right eye
     plt.figure(22)
     c = GetColorScalarArray(lgn_v1_data, 'left_right_eye')
     terminal_segment_color = GetTerminalColorScalar(terminal_segment_len, c)
     Plot2DMapWithColor(pos_terminal_2d, terminal_segment_color, 0.2, 'V1_term_2d_map_left_right_eye',
                        labels=['x', 'y'])
 
-    plt.figure(31)
-    cc = GetColorScalarArray(lgn_v1_data, 'lgn_xy')
-    Plot2DMapWithColorDirection  # TODO here
+    plt.figure(31); plt.cla()
+    cc = GetColorScalarArray(lgn_v1_data, 'lgn_yx')
+    terminal_centers = GetTerminalStat(pos_terminal_2d, terminal_segment_len)
+    Plot2DMapWithColor(terminal_centers, cc, 30.0, 'V1_term_2d_map_lgn_yx',
+                       labels=['x', 'y'])
 
 if __name__ == '__main__':
     if len(sys.argv) > 1:
