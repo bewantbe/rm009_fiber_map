@@ -196,21 +196,6 @@ def LoadV1Mesh():
 
     return mesh, v1_s_mesh
 
-def ShowLGNPlt(ax, show_layers = [0]):
-    mesh_list = LoadLGNMesh()
-    for idx_l in show_layers:
-        mesh = mesh_list[idx_l]
-        x, y, z = mesh.vertices.T
-        ax.plot_trisurf(x, y, z, triangles=mesh.faces,
-            color='grey', alpha=0.1)
-
-def DrawMeshBatch(plotter, mesh_list):
-    for mesh in mesh_list:
-        pv_mesh = pv.PolyData(mesh.vertices,
-                    np.c_[[[3]]*len(mesh.faces),mesh.faces])
-        plotter.add_mesh(pv_mesh, smooth_shading=True,
-                        opacity = 0.1)
-
 def Normalize(vector):
     norm = np.linalg.norm(vector)
     if norm == 0: 
@@ -321,6 +306,85 @@ def GetTerminalColorScalar(terminal_segment_len, color_scalar):
     terminal_color_scalar = np.repeat(color_scalar, terminal_segment_len)
     return terminal_color_scalar
 
+def LoadSWC(swc_dir = './rm009_swcs'):
+    ## load and check SWCs
+    swcs_ext = LoadSwcDir(swc_dir)
+    swcs_ext = SortSwcsList(swcs_ext)
+    swcs_a = ArrayfyList(swcs_ext, index_list = 
+            [s.neu_id for s in swcs_ext]
+        )
+    CheckDuplicateName(swcs_a)
+
+    ## filter soma in LGN
+    # locate soma
+    pos_soma = np.array([s.ntree[1][0, 0:3] for s in swcs_a])
+    idx_valid = pos_soma[:, 2] < 40000
+    swcs_a = swcs_a[idx_valid]
+    pos_soma = pos_soma[idx_valid]
+    # location of soma
+    pos_soma2 = np.array([s.ntree[1][0, 0:3] for s in swcs_a])
+    assert not np.any(pos_soma2 - pos_soma)
+
+    return swcs_a, pos_soma
+
+def GetSomaLayer(pos_soma, lgn_mesh_s):
+    soma_layer_i = np.zeros(len(pos_soma), dtype=np.int32)
+    for i_layer in range(len(lgn_mesh_s)):
+        bidx = lgn_mesh_s[i_layer].contains(pos_soma)
+        # note that we must put LGN to the first mesh,
+        # to be overwritten by detailed layers
+        soma_layer_i[bidx] = i_layer
+    return soma_layer_i
+
+def LoadAndAnalyze():
+    """ Main function of 'analyzer' """
+    swcs_a, pos_soma = LoadSWC()
+    lgn_mesh_s = LoadLGNMesh()
+    v1_mesh, v1_s_mesh = LoadV1Mesh()
+
+    soma_layer_i = GetSomaLayer(pos_soma, lgn_mesh_s)
+
+    ## Prepare LGN data
+    # get 2D map coordinate of soma in LGN layer(s)
+    lgn_frame_manifold, pos_soma_2d = GetLgnSoma2DMap(pos_soma, lgn_mesh_s)
+
+    ## parpare V1 data
+    terminal_set, terminal_segment_len = GetTopoMapSiteWithColor(swcs_a, soma_layer_i)
+    v1_frame_manifold, pos_terminal_2d = GetV1Terminal2DMap(terminal_set, v1_mesh)
+    
+    lgn_v1_data = Struct(
+        swcs_a = swcs_a,
+        lgn_mesh_s = lgn_mesh_s,
+        v1_mesh   = v1_mesh,
+        v1_s_mesh = v1_s_mesh,
+        # LGN
+        pos_soma     = pos_soma,
+        soma_layer_i = soma_layer_i,
+        lgn_frame_manifold = lgn_frame_manifold,
+        pos_soma_2d = pos_soma_2d,
+        # V1
+        terminal_set = terminal_set,
+        terminal_segment_len = terminal_segment_len,
+        v1_frame_manifold = v1_frame_manifold,
+        pos_terminal_2d = pos_terminal_2d,
+    )
+    return lgn_v1_data
+
+def ShowLGNPlt(ax, show_layers = [0]):
+    mesh_list = LoadLGNMesh()
+    for idx_l in show_layers:
+        mesh = mesh_list[idx_l]
+        x, y, z = mesh.vertices.T
+        ax.plot_trisurf(x, y, z, triangles=mesh.faces,
+            color='grey', alpha=0.1)
+
+def DrawMeshBatch(plotter, mesh_list):
+    for mesh in mesh_list:
+        pv_mesh = pv.PolyData(mesh.vertices,
+                    np.c_[[[3]]*len(mesh.faces),mesh.faces])
+        plotter.add_mesh(pv_mesh, smooth_shading=True,
+                        opacity = 0.1)
+
 def PlotInMatplotlib(lgn_v1_data):
     # swcs_a, pos_soma, lgn_mesh_s, v1_mesh
     pos_soma = lgn_v1_data.pos_soma
@@ -406,6 +470,39 @@ def PlotErwinData(erwin_data, ml_idx = 120, ap_idx = 120):
     plt.ylabel('dorsal-ventral')
     SaveCurrentFigure(f'erwin_layers_map_ap{ap_idx}.png')
 
+def DrawErwin3Views():
+    """ Show Erwin LGN map"""
+
+    ## LGN reference map
+    erwin_data = ReadErwinData()
+    PlotErwinData(erwin_data)
+
+    # TODO:  we need to plot 3D map in 2D with a slider for slicing
+    # maybe use pyvista or PyQtGraph
+    # python -m pyqtgraph.examples
+    #   find the data slicing example
+
+    map_render_mode = 'none'
+    if map_render_mode == 'pyqtgraph':
+        # the pyqtgraph way
+        import pyqtgraph as pg
+        from pyqtgraph.Qt import QtWidgets
+
+        app = pg.mkQApp("Data Slicing Example")
+        win = QtWidgets.QMainWindow()
+        win.resize(800,800)
+        # TODO: add a slider for slicing
+
+    elif map_render_mode == 'pyvista':
+        # the pyvista way
+        img_pv = pv.wrap(erwin_data.ecc)
+        ss = img_pv.slice_along_axis(n=7, axis="z")
+        ss.plot(cmap="viridis", opacity=0.75)
+    elif map_render_mode == 'none':
+        pass
+    else:
+        logger.warning('No map rendering mode specified!')
+
 def DrawDotsWithColor(plotter, pos, color_scalar, point_size):
     cloud = pv.PolyData(pos)
     cloud['color_scalar'] = color_scalar
@@ -454,6 +551,14 @@ def DrawCoordinateFrame(plotter, frame_manifold, arrow_scaling):
 def Plot2DMapWithColor(pos_2d, color_scalar, point_size, title, labels = ['x','y']):
     plt.clf()
     plt.cla()
+    plt.scatter(pos_2d[:, 0], pos_2d[:, 1],
+                c=color_scalar, cmap='viridis', s = point_size)
+    plt.xlabel(labels[0])
+    plt.ylabel(labels[1])
+    plt.title(title)
+    SaveCurrentFigure(f'{title}.png')
+
+def Plot2DMapWithColorDirection(pos_2d, color_scalar, point_size, title, labels = ['x','y']):
     plt.scatter(pos_2d[:, 0], pos_2d[:, 1],
                 c=color_scalar, cmap='viridis', s = point_size)
     plt.xlabel(labels[0])
@@ -520,109 +625,13 @@ def PlotInPyvista(lgn_v1_data):
     DrawMeshBatch(plotter, [v1_s_mesh])  # use simplified mesh for now
     # plot terminal points
     cloud = pv.PolyData(terminal_set)
-    plotter.add_mesh(cloud, color="red", point_size = 20.0,
+    plotter.add_mesh(cloud, color="red", point_size = 5.0,
                      render_points_as_spheres = True)
     # plot reference manifold
     DrawCoordinateFrame(plotter, v1_frame_manifold, 0.35)
     # plot also LGN
     DrawMeshBatch(plotter, lgn_mesh_s[1:2])
     plotter.show()
-
-def DrawErwin3Views():
-    """ Show Erwin LGN map"""
-
-    ## LGN reference map
-    erwin_data = ReadErwinData()
-    PlotErwinData(erwin_data)
-
-    # TODO:  we need to plot 3D map in 2D with a slider for slicing
-    # maybe use pyvista or PyQtGraph
-    # python -m pyqtgraph.examples
-    #   find the data slicing example
-
-    map_render_mode = 'none'
-    if map_render_mode == 'pyqtgraph':
-        # the pyqtgraph way
-        import pyqtgraph as pg
-        from pyqtgraph.Qt import QtWidgets
-
-        app = pg.mkQApp("Data Slicing Example")
-        win = QtWidgets.QMainWindow()
-        win.resize(800,800)
-        # TODO: add a slider for slicing
-
-    elif map_render_mode == 'pyvista':
-        # the pyvista way
-        img_pv = pv.wrap(erwin_data.ecc)
-        ss = img_pv.slice_along_axis(n=7, axis="z")
-        ss.plot(cmap="viridis", opacity=0.75)
-    elif map_render_mode == 'none':
-        pass
-    else:
-        logger.warning('No map rendering mode specified!')
-
-def LoadSWC(swc_dir = './rm009_swcs'):
-    ## load and check SWCs
-    swcs_ext = LoadSwcDir(swc_dir)
-    swcs_ext = SortSwcsList(swcs_ext)
-    swcs_a = ArrayfyList(swcs_ext, index_list = 
-            [s.neu_id for s in swcs_ext]
-        )
-    CheckDuplicateName(swcs_a)
-
-    ## filter soma in LGN
-    # locate soma
-    pos_soma = np.array([s.ntree[1][0, 0:3] for s in swcs_a])
-    idx_valid = pos_soma[:, 2] < 40000
-    swcs_a = swcs_a[idx_valid]
-    pos_soma = pos_soma[idx_valid]
-    # location of soma
-    pos_soma2 = np.array([s.ntree[1][0, 0:3] for s in swcs_a])
-    assert not np.any(pos_soma2 - pos_soma)
-
-    return swcs_a, pos_soma
-
-def GetSomaLayer(pos_soma, lgn_mesh_s):
-    soma_layer_i = np.zeros(len(pos_soma), dtype=np.int32)
-    for i_layer in range(len(lgn_mesh_s)):
-        bidx = lgn_mesh_s[i_layer].contains(pos_soma)
-        # note that we must put LGN to the first mesh,
-        # to be overwritten by detailed layers
-        soma_layer_i[bidx] = i_layer
-    return soma_layer_i
-
-def LoadAndAnalyze():
-    swcs_a, pos_soma = LoadSWC()
-    lgn_mesh_s = LoadLGNMesh()
-    v1_mesh, v1_s_mesh = LoadV1Mesh()
-
-    soma_layer_i = GetSomaLayer(pos_soma, lgn_mesh_s)
-
-    ## Prepare LGN data
-    # get 2D map coordinate of soma in LGN layer(s)
-    lgn_frame_manifold, pos_soma_2d = GetLgnSoma2DMap(pos_soma, lgn_mesh_s)
-
-    ## parpare V1 data
-    terminal_set, terminal_segment_len = GetTopoMapSiteWithColor(swcs_a, soma_layer_i)
-    v1_frame_manifold, pos_terminal_2d = GetV1Terminal2DMap(terminal_set, v1_mesh)
-    
-    lgn_v1_data = Struct(
-        swcs_a = swcs_a,
-        lgn_mesh_s = lgn_mesh_s,
-        v1_mesh   = v1_mesh,
-        v1_s_mesh = v1_s_mesh,
-        # LGN
-        pos_soma     = pos_soma,
-        soma_layer_i = soma_layer_i,
-        lgn_frame_manifold = lgn_frame_manifold,
-        pos_soma_2d = pos_soma_2d,
-        # V1
-        terminal_set = terminal_set,
-        terminal_segment_len = terminal_segment_len,
-        v1_frame_manifold = v1_frame_manifold,
-        pos_terminal_2d = pos_terminal_2d,
-    )
-    return lgn_v1_data
 
 SaveCurrentFigure = lambda fn: plt.savefig(os.path.join('./pic', fn))
 
@@ -665,6 +674,10 @@ def GenerateFigures(lgn_v1_data):
     terminal_segment_color = GetTerminalColorScalar(terminal_segment_len, c)
     Plot2DMapWithColor(pos_terminal_2d, terminal_segment_color, 0.2, 'V1_term_2d_map_left_right_eye',
                        labels=['x', 'y'])
+
+    plt.figure(31)
+    cc = GetColorScalarArray(lgn_v1_data, 'lgn_xy')
+    Plot2DMapWithColorDirection  # TODO here
 
 if __name__ == '__main__':
     if len(sys.argv) > 1:
