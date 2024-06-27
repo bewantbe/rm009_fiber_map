@@ -215,10 +215,12 @@ def GetLgnSoma2DMap(pos_soma, lgn_mesh_list):
     # define the origin of the manifold in the world coordinate
     origin_pos = np.mean(lgn_mesh_list[idx_layer].vertices, axis = 0)
     # define coordinate frame at the origin of the manifold (plane)
-    origin_normal = Normalize(np.array([-0.7, 1, 0.9]))
-    origin_x_direction = np.array([1, 0, -0.3])
-    origin_x_direction = Normalize(ProjectionResidual(origin_x_direction, origin_normal))
-    origin_y_direction = np.cross(origin_normal, origin_x_direction)
+    origin_normal = Normalize(np.array([0.7, -1.0, -0.9]))
+    # approximate Inclination
+    origin_y_direction = np.array([1, 0, -0.3])
+    origin_y_direction = Normalize(ProjectionResidual(origin_y_direction, origin_normal))
+    # approximate Eccentricity
+    origin_x_direction = np.cross(origin_normal, -origin_y_direction)
     # get projection of the soma position on the manifold
     pos_soma_2d = (pos_soma - origin_pos).dot(
         np.c_[origin_x_direction, origin_y_direction])
@@ -563,7 +565,8 @@ def DrawCoordinateFrame(plotter, frame_manifold, arrow_scaling):
     plotter.add_mesh(frame_geo_x, color='red')
     plotter.add_mesh(frame_geo_y, color='green')
 
-def Plot2DMapWithColor(pos_2d, color_scalar, point_size, title, labels = ['x','y']):
+def Plot2DMapWithColor(pos_2d, color_scalar, point_size,
+                       title, labels = ['x','y'], cmap = None, **kwargs):
     X = pos_2d[:, 0]
     Y = pos_2d[:, 1]
     if len(color_scalar.shape) == 2:
@@ -573,8 +576,9 @@ def Plot2DMapWithColor(pos_2d, color_scalar, point_size, title, labels = ['x','y
         plt.quiver(X, Y, dx, dy, headlength=3.0)
     else:
         c = color_scalar
-    plt.scatter(X, Y,
-                c=c, cmap='viridis', s = point_size)
+    if cmap is None:
+        cmap = 'viridis'
+    plt.scatter(X, Y, c=c, cmap=cmap, s = point_size, **kwargs)
     plt.xlabel(labels[0])
     plt.ylabel(labels[1])
     plt.title(title)
@@ -618,7 +622,7 @@ def GetColorScalarArray(lgn_v1_data, color_mode):
     
     return color_scalar
 
-def PlotInPyvista(lgn_v1_data):
+def Draw3DLgnV1(lgn_v1_data):
     """Main ploting function"""
     swcs_a       = lgn_v1_data.swcs_a
     lgn_mesh_s   = lgn_v1_data.lgn_mesh_s
@@ -676,17 +680,17 @@ def GenerateFigures(lgn_v1_data):
     plt.figure(10)
     c = GetColorScalarArray(lgn_v1_data, 'lgn_x')
     Plot2DMapWithColor(pos_soma_2d, c, 50.0, 'LGN_soma_2d_map_x',
-                       labels=['Inclination', 'Eccentricity'])
+                       labels=['Eccentricity', 'Inclination'])
     # y
     plt.figure(11)
     c = GetColorScalarArray(lgn_v1_data, 'lgn_y')
     Plot2DMapWithColor(pos_soma_2d, c, 50.0, 'LGN_soma_2d_map_y',
-                       labels=['Inclination', 'Eccentricity'])
-    # yx
+                       labels=['Eccentricity', 'Inclination'])
+    # xy
     plt.figure(19); plt.cla()
-    c = GetColorScalarArray(lgn_v1_data, 'lgn_yx')
-    Plot2DMapWithColor(pos_soma_2d, c, 35.0, 'LGN_soma_2d_map_yx',
-                       labels=['Inclination', 'Eccentricity'])
+    cc = GetColorScalarArray(lgn_v1_data, 'lgn_xy')
+    Plot2DMapWithColor(pos_soma_2d, c, 35.0, 'LGN_soma_2d_map_xy',
+                       labels=['Eccentricity', 'Inclination'])
 
 
     ## draw the 2D map
@@ -702,18 +706,22 @@ def GenerateFigures(lgn_v1_data):
     terminal_segment_color = GetTerminalColorScalar(terminal_segment_len, c)
     Plot2DMapWithColor(pos_terminal_2d, terminal_segment_color, 0.2, 'V1_term_2d_map_lgn_y',
                        labels=['x', 'y'])
-    # V1 by lgn left-right eye
-    plt.figure(22)
-    c = GetColorScalarArray(lgn_v1_data, 'left_right_eye')
-    terminal_segment_color = GetTerminalColorScalar(terminal_segment_len, c)
-    Plot2DMapWithColor(pos_terminal_2d, terminal_segment_color, 0.2, 'V1_term_2d_map_left_right_eye',
+    # V1 by lgn x and y
+    plt.figure(29); plt.cla()
+    terminal_centers = GetTerminalStat(pos_terminal_2d, terminal_segment_len)
+    Plot2DMapWithColor(terminal_centers, cc, 30.0, 'V1_term_2d_map_lgn_xy',
                        labels=['x', 'y'])
 
-    plt.figure(29); plt.cla()
-    cc = GetColorScalarArray(lgn_v1_data, 'lgn_yx')
-    terminal_centers = GetTerminalStat(pos_terminal_2d, terminal_segment_len)
-    Plot2DMapWithColor(terminal_centers, cc, 30.0, 'V1_term_2d_map_lgn_yx',
-                       labels=['x', 'y'])
+    # V1 by lgn left-right eye
+    plt.figure(25); plt.cla()
+    c = GetColorScalarArray(lgn_v1_data, 'left_right_eye')
+    cm = {'cmap': 'hsv', 'vmin': -0.1, 'vmax': 3.0, 'alpha': 0.3}
+    #cm = {'cmap': 'RdYlGn', 'vmin': -0.2, 'vmax': 1.2, 'alpha': 0.1}
+    terminal_segment_color = GetTerminalColorScalar(terminal_segment_len, c)
+    ipermute = np.random.permutation(len(terminal_segment_color))
+    Plot2DMapWithColor(pos_terminal_2d[ipermute], terminal_segment_color[ipermute],
+                       0.2, 'V1_term_2d_map_left_right_eye',
+                       labels=['x', 'y'], **cm)
 
 if __name__ == '__main__':
     if len(sys.argv) > 1:
@@ -727,7 +735,7 @@ if __name__ == '__main__':
     if plot_mode == 'plt':
         PlotInMatplotlib(lgn_v1_data)
     elif plot_mode == 'pyvista':
-        PlotInPyvista(lgn_v1_data)
+        Draw3DLgnV1(lgn_v1_data)
     elif plot_mode == 'output_figure':
         GenerateFigures(lgn_v1_data)
     elif plot_mode == 'erwin':
