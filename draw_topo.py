@@ -650,8 +650,8 @@ def PlotInPyvista(lgn_v1_data):
     plotter = pv.Plotter()
     plotter.show_axes()
     # draw V1
-    #DrawMeshBatch(plotter, [v1_mesh])
-    DrawMeshBatch(plotter, [v1_s_mesh])  # use simplified mesh for now
+    DrawMeshBatch(plotter, [v1_mesh])
+    #DrawMeshBatch(plotter, [v1_s_mesh])  # use simplified mesh for now
     # plot terminal points
     cloud = pv.PolyData(terminal_set)
     plotter.add_mesh(cloud, color="red", point_size = 5.0,
@@ -682,7 +682,12 @@ def GenerateFigures(lgn_v1_data):
     c = GetColorScalarArray(lgn_v1_data, 'lgn_y')
     Plot2DMapWithColor(pos_soma_2d, c, 50.0, 'LGN_soma_2d_map_y',
                        labels=['Inclination', 'Eccentricity'])
-    #plt.show()
+    # yx
+    plt.figure(19); plt.cla()
+    c = GetColorScalarArray(lgn_v1_data, 'lgn_yx')
+    Plot2DMapWithColor(pos_soma_2d, c, 35.0, 'LGN_soma_2d_map_yx',
+                       labels=['Inclination', 'Eccentricity'])
+
 
     ## draw the 2D map
     # V1 by lgn x
@@ -704,7 +709,7 @@ def GenerateFigures(lgn_v1_data):
     Plot2DMapWithColor(pos_terminal_2d, terminal_segment_color, 0.2, 'V1_term_2d_map_left_right_eye',
                        labels=['x', 'y'])
 
-    plt.figure(31); plt.cla()
+    plt.figure(29); plt.cla()
     cc = GetColorScalarArray(lgn_v1_data, 'lgn_yx')
     terminal_centers = GetTerminalStat(pos_terminal_2d, terminal_segment_len)
     Plot2DMapWithColor(terminal_centers, cc, 30.0, 'V1_term_2d_map_lgn_yx',
