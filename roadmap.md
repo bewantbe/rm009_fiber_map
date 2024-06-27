@@ -19,6 +19,7 @@ Under consideration
   - e.g. color as the distance to the soma
   - draw ellipse to indicate the spread of the terminals
   - Try different definition of terminals.
+* Plot also the neuron index in the 2D map, for fast positioning.
 * Use voxel based mask for LGN layer identification.
 * registrate the LGN mask with LGN standard layer model.
 * Use standardized LGN, V1 coordinate
