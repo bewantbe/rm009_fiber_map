@@ -4,8 +4,33 @@ pip install Rtree  # for trimesh contain
 
 pip install SimpleITK  # for neu_walk.py
 
-ln -s /home/xyy/Documents/SIAT_CAS/xu/tracing/swc_collect/RM009/v2024-06-14_lvl7verified/ rm009_swcs
+#ln -s /home/xyy/Documents/SIAT_CAS/xu/tracing/swc_collect/RM009/v2024-06-14_lvl7verified/ rm009_swcs
+ln -s /home/xyy/Documents/SIAT_CAS/xu/tracing/swc_collect/RM009/v2024-06-28_lvl7verified/ rm009_swcs
 ln -s /home/xyy/Documents/SIAT_CAS/xu/tracing/swc_collect/RM009/mesh rm009_mesh
 
 
-python ../fiber-inspector/lyp_to_swc.py --export_largest_only --output_directory rm009_swcs rm009_swcs/*.lyp
+#python ../fiber-inspector/lyp_to_swc.py --export_largest_only --output_directory rm009_swcs rm009_swcs/*.lyp
+python /home/xyy/code/py/fiber-inspector/lyp_to_swc.py --export_largest_only "*.lyp"
+
+# convert lyp2 to lyp
+
+cd /home/xyy/Documents/SIAT_CAS/xu/tracing/swc_collect/RM009/v2024-06-18_lvl7verified
+# for loop all *.lyp2 files in the directory
+for f in *.lyp2; do
+    echo 'Converting' $f
+    f0="${f%.lyp2}.lyp"
+    LD_LIBRARY_PATH=/home/xyy/soft/miniconda3/envs/py36/lib:/home/xyy/soft/lychnis/env/library:/home/xyy/soft/lychnis/env/library/xcb /home/xyy/soft/lychnis/Lychnis-tool-1.5.7.10 convert-format -mode=2 -input="$f" -output="$f0"
+done
+
+## For Windows
+
+# generate SWCs from lyp files
+cd E:\swc_collect\v2024-06-28_lvl7verified
+python C:/Users/xyy82/code/py/fiber-inspector/lyp_to_swc.py --export_largest_only $(ls *.lyp | % {$_.FullName})
+
+# create a symbolic link to the swc directory in windows, using CMD
+# using admin
+cd C:\Users\xyy82\code\py\rm009_fiber_map
+mklink /D rm009_swcs E:\swc_collect\v2024-06-28_lvl7verified
+
+# using powershell to create a symbolic link to the swc directory in windows
