@@ -705,7 +705,7 @@ def GenerateFigures(lgn_v1_data):
     # xy
     plt.figure(19); plt.cla()
     cc = GetColorScalarArray(lgn_v1_data, 'lgn_xy')
-    Plot2DMapWithColor(pos_soma_2d, c, 35.0, 'LGN_soma_2d_map_xy',
+    Plot2DMapWithColor(pos_soma_2d, cc, 35.0, 'LGN_soma_2d_map_xy',
                        labels=['Eccentricity', 'Inclination'])
 
 
