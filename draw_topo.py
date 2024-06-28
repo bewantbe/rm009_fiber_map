@@ -565,6 +565,21 @@ def DrawCoordinateFrame(plotter, frame_manifold, arrow_scaling):
     plotter.add_mesh(frame_geo_x, color='red')
     plotter.add_mesh(frame_geo_y, color='green')
 
+def Plot2DLabels(pos_2d, swcs_a, **kwargs):
+    # if kwargs is empty, use defaults
+    kwargs0 = {
+        'horizontalalignment': 'left',
+        'verticalalignment': 'top',
+        'fontsize': 4,
+        'color': 'black',
+        'alpha': 0.4
+    }
+    kwargs0.update(kwargs)
+
+    labels = [s.neu_id for s in swcs_a]
+    for i, txt in enumerate(labels):
+        plt.text(pos_2d[i, 0], pos_2d[i, 1], txt, **kwargs0)
+
 def Plot2DMapWithColor(pos_2d, color_scalar, point_size,
                        title, labels = ['x','y'], cmap = None, **kwargs):
     X = pos_2d[:, 0]
@@ -573,7 +588,7 @@ def Plot2DMapWithColor(pos_2d, color_scalar, point_size,
         c = color_scalar[:, 0]
         d = color_scalar[:, 1]
         dx, dy = np.cos(d), np.sin(d)
-        plt.quiver(X, Y, dx, dy, headlength=3.0)
+        plt.quiver(X, Y, dx, dy, headlength=3.0, alpha=0.5)
     else:
         c = color_scalar
     if cmap is None:
@@ -669,6 +684,7 @@ def Draw3DLgnV1(lgn_v1_data):
 SaveCurrentFigure = lambda fn: plt.savefig(os.path.join('./pic', fn), dpi=300)
 
 def GenerateFigures(lgn_v1_data):
+    swcs_a = lgn_v1_data.swcs_a
     # LGN
     pos_soma_2d  = lgn_v1_data.pos_soma_2d
     # V1
@@ -699,18 +715,26 @@ def GenerateFigures(lgn_v1_data):
     c = GetColorScalarArray(lgn_v1_data, 'lgn_x')
     terminal_segment_color = GetTerminalColorScalar(terminal_segment_len, c)
     Plot2DMapWithColor(pos_terminal_2d, terminal_segment_color, 0.2, 'V1_term_2d_map_lgn_x',
-                       labels=['x', 'y'])
+                       labels=['x (um)', 'y (um)'])
     # V1 by lgn y
     plt.figure(21)
     c = GetColorScalarArray(lgn_v1_data, 'lgn_y')
     terminal_segment_color = GetTerminalColorScalar(terminal_segment_len, c)
     Plot2DMapWithColor(pos_terminal_2d, terminal_segment_color, 0.2, 'V1_term_2d_map_lgn_y',
-                       labels=['x', 'y'])
+                       labels=['x (um)', 'y (um)'])
     # V1 by lgn x and y
     plt.figure(29); plt.cla()
     terminal_centers = GetTerminalStat(pos_terminal_2d, terminal_segment_len)
     Plot2DMapWithColor(terminal_centers, cc, 30.0, 'V1_term_2d_map_lgn_xy',
-                       labels=['x', 'y'])
+                       labels=['x (um)', 'y (um)'])
+
+    # V1 by lgn x and y, with neuron id
+    plt.figure(28); plt.cla()
+    # labels as the swc name
+    terminal_centers = GetTerminalStat(pos_terminal_2d, terminal_segment_len)
+    Plot2DLabels(terminal_centers, swcs_a)
+    Plot2DMapWithColor(terminal_centers, cc, 30.0, 'V1_term_2d_map_lgn_xy_dbg',
+                       labels=['x (um)', 'y (um)'])
 
     # V1 by lgn left-right eye
     plt.figure(25); plt.cla()
@@ -721,7 +745,7 @@ def GenerateFigures(lgn_v1_data):
     ipermute = np.random.permutation(len(terminal_segment_color))
     Plot2DMapWithColor(pos_terminal_2d[ipermute], terminal_segment_color[ipermute],
                        0.2, 'V1_term_2d_map_left_right_eye',
-                       labels=['x', 'y'], **cm)
+                       labels=['x (um)', 'y (um)'], **cm)
 
 if __name__ == '__main__':
     if len(sys.argv) > 1:
