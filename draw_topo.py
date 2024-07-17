@@ -1,5 +1,11 @@
 # Draw topological map for LGN-V1 tracing
 
+"""
+# Usage:
+# output figure
+python draw_topy.py output_figure
+"""
+
 import os
 import sys
 import glob
@@ -285,15 +291,18 @@ def GetV1Terminal2DMap(pos_terminal, v1_mesh):
 
 def GetTopoMapSiteWithColor(swcs_a, color_scalar):
     """ get terminal points """
-    tip_filter = '(path_length_to_root(leaves) > 30000) & (branch_depth(leaves) >= 5)'
-    #proc_filter = '(path_length_to_root(end_point(processes)) > 30000) & (branch_depth(processes) == 7)'
     terminal_set = []
     terminal_segment_len = np.zeros(len(swcs_a.ntree_ext), dtype = np.int32)
+    term_plan = 2
     for j, ntr in enumerate(swcs_a.ntree_ext):
-        b_leaves = exec_filter_string(tip_filter, ntr)
-        pos = ntr.position_of_node(ntr.leaves[b_leaves])
-        #b_proc = exec_filter_string(proc_filter, ntr)
-        #pos = ntr.position_of_node(ntr.end_point(ntr.processes)[b_proc])
+        if term_plan == 1:
+            tip_filter = '(path_length_to_root(leaves) > 30000) & (branch_depth(leaves) >= 5)'
+            b_leaves = exec_filter_string(tip_filter, ntr)
+            pos = ntr.position_of_node(ntr.leaves[b_leaves])
+        elif term_plan == 2:
+            proc_filter = '(path_length_to_root(end_point(processes)) > 30000) & (branch_depth(processes) == 7)'
+            b_proc = exec_filter_string(proc_filter, ntr)
+            pos = ntr.position_of_node(ntr.end_point(ntr.processes)[b_proc])
         terminal_set.append(pos)
         terminal_segment_len[j] = len(pos)
         #bidx = v1_mesh.contains(pos)   # very slow, >1 hours
@@ -323,7 +332,7 @@ def GetTerminalStat(pos_terminal_2d, terminal_segment_len):
                 terminal_centers[k] = pos
     return terminal_centers
 
-def LoadSWC(swc_dir = './rm009_swcs'):
+def LoadSWC(swc_dir):
     ## load and check SWCs
     swcs_ext = LoadSwcDir(swc_dir)
     swcs_ext = SortSwcsList(swcs_ext)
@@ -336,6 +345,7 @@ def LoadSWC(swc_dir = './rm009_swcs'):
     # locate soma
     pos_soma = np.array([s.ntree[1][0, 0:3] for s in swcs_a])
     idx_valid = pos_soma[:, 2] < 40000
+    idx_valid[swcs_a.neu_id.index('505')] = False  # filter out specific
     swcs_a = swcs_a[idx_valid]
     pos_soma = pos_soma[idx_valid]
     # location of soma
@@ -355,7 +365,11 @@ def GetSomaLayer(pos_soma, lgn_mesh_s):
 
 def LoadAndAnalyze():
     """ Main function of 'analyzer' """
-    swcs_a, pos_soma = LoadSWC()
+    #old
+    #swc_dir = '/mnt/data_ext/swc_collect/RM009_v1.6.6/1.6.6_complete/'
+    # new
+    swc_dir = './rm009_swcs'
+    swcs_a, pos_soma = LoadSWC(swc_dir)
     lgn_mesh_s = LoadLGNMesh()
     v1_mesh, v1_s_mesh = LoadV1Mesh()
 
@@ -714,18 +728,31 @@ def GenerateFigures(lgn_v1_data):
     plt.figure(20)
     c = GetColorScalarArray(lgn_v1_data, 'lgn_x')
     terminal_segment_color = GetTerminalColorScalar(terminal_segment_len, c)
-    Plot2DMapWithColor(pos_terminal_2d, terminal_segment_color, 0.2, 'V1_term_2d_map_lgn_x',
+    Plot2DMapWithColor(pos_terminal_2d, terminal_segment_color, 0.2,
+                       'V1_term_2d_map_lgn_x',
+                       labels=['x (um)', 'y (um)'])
+    plt.figure(20); plt.cla()
+    terminal_centers = GetTerminalStat(pos_terminal_2d, terminal_segment_len)
+    Plot2DMapWithColor(terminal_centers, cc[:,0], 20,
+                       'V1_termc_2d_map_lgn_x',
                        labels=['x (um)', 'y (um)'])
     # V1 by lgn y
     plt.figure(21)
     c = GetColorScalarArray(lgn_v1_data, 'lgn_y')
     terminal_segment_color = GetTerminalColorScalar(terminal_segment_len, c)
-    Plot2DMapWithColor(pos_terminal_2d, terminal_segment_color, 0.2, 'V1_term_2d_map_lgn_y',
+    Plot2DMapWithColor(pos_terminal_2d, terminal_segment_color, 0.2,
+                       'V1_term_2d_map_lgn_y',
                        labels=['x (um)', 'y (um)'])
+    plt.figure(21); plt.cla()
+    Plot2DMapWithColor(terminal_centers, cc[:,1], 20,
+                       'V1_termc_2d_map_lgn_y',
+                       labels=['x (um)', 'y (um)'])
+
     # V1 by lgn x and y
     plt.figure(29); plt.cla()
     terminal_centers = GetTerminalStat(pos_terminal_2d, terminal_segment_len)
-    Plot2DMapWithColor(terminal_centers, cc, 30.0, 'V1_term_2d_map_lgn_xy',
+    Plot2DMapWithColor(terminal_centers, cc, 30.0,
+                       'V1_termc_2d_map_lgn_xy',
                        labels=['x (um)', 'y (um)'])
 
     # V1 by lgn x and y, with neuron id
@@ -733,7 +760,8 @@ def GenerateFigures(lgn_v1_data):
     # labels as the swc name
     terminal_centers = GetTerminalStat(pos_terminal_2d, terminal_segment_len)
     Plot2DLabels(terminal_centers, swcs_a)
-    Plot2DMapWithColor(terminal_centers, cc, 30.0, 'V1_term_2d_map_lgn_xy_dbg',
+    Plot2DMapWithColor(terminal_centers, cc, 30.0,
+                       'V1_term_2d_map_lgn_xy_dbg',
                        labels=['x (um)', 'y (um)'])
 
     # V1 by lgn left-right eye
@@ -743,7 +771,8 @@ def GenerateFigures(lgn_v1_data):
     #cm = {'cmap': 'RdYlGn', 'vmin': -0.2, 'vmax': 1.2, 'alpha': 0.1}
     terminal_segment_color = GetTerminalColorScalar(terminal_segment_len, c)
     ipermute = np.random.permutation(len(terminal_segment_color))
-    Plot2DMapWithColor(pos_terminal_2d[ipermute], terminal_segment_color[ipermute],
+    Plot2DMapWithColor(pos_terminal_2d[ipermute],
+                       terminal_segment_color[ipermute],
                        0.2, 'V1_term_2d_map_left_right_eye',
                        labels=['x (um)', 'y (um)'], **cm)
 
