@@ -363,12 +363,8 @@ def GetSomaLayer(pos_soma, lgn_mesh_s):
         soma_layer_i[bidx] = i_layer
     return soma_layer_i
 
-def LoadAndAnalyze():
+def LoadAndAnalyze(swc_dir):
     """ Main function of 'analyzer' """
-    #old
-    #swc_dir = '/mnt/data_ext/swc_collect/RM009_v1.6.6/1.6.6_complete/'
-    # new
-    swc_dir = './rm009_swcs'
     swcs_a, pos_soma = LoadSWC(swc_dir)
     lgn_mesh_s = LoadLGNMesh()
     v1_mesh, v1_s_mesh = LoadV1Mesh()
@@ -380,24 +376,26 @@ def LoadAndAnalyze():
     lgn_frame_manifold, pos_soma_2d = GetLgnSoma2DMap(pos_soma, lgn_mesh_s)
 
     ## parpare V1 data
-    terminal_set, terminal_segment_len = GetTopoMapSiteWithColor(swcs_a, soma_layer_i)
-    v1_frame_manifold, pos_terminal_2d = GetV1Terminal2DMap(terminal_set, v1_mesh)
+    terminal_set, terminal_segment_len = \
+            GetTopoMapSiteWithColor(swcs_a, soma_layer_i)
+    v1_frame_manifold, pos_terminal_2d = \
+            GetV1Terminal2DMap(terminal_set, v1_mesh)
     
     lgn_v1_data = Struct(
-        swcs_a = swcs_a,
+        swcs_a     = swcs_a,
         lgn_mesh_s = lgn_mesh_s,
-        v1_mesh   = v1_mesh,
-        v1_s_mesh = v1_s_mesh,
+        v1_mesh    = v1_mesh,
+        v1_s_mesh  = v1_s_mesh,
         # LGN
-        pos_soma     = pos_soma,
-        soma_layer_i = soma_layer_i,
+        pos_soma           = pos_soma,
+        soma_layer_i       = soma_layer_i,
         lgn_frame_manifold = lgn_frame_manifold,
-        pos_soma_2d = pos_soma_2d,
+        pos_soma_2d        = pos_soma_2d,
         # V1
-        terminal_set = terminal_set,
+        terminal_set         = terminal_set,
         terminal_segment_len = terminal_segment_len,
-        v1_frame_manifold = v1_frame_manifold,
-        pos_terminal_2d = pos_terminal_2d,
+        v1_frame_manifold    = v1_frame_manifold,
+        pos_terminal_2d      = pos_terminal_2d,
     )
     return lgn_v1_data
 
@@ -783,7 +781,11 @@ if __name__ == '__main__':
         plot_mode = 'output_figure'
 
     if plot_mode != 'erwin':
-        lgn_v1_data = LoadAndAnalyze()
+        #old
+        #swc_dir = '/mnt/data_ext/swc_collect/RM009_v1.6.6/1.6.6_complete/'
+        # new
+        swc_dir = './rm009_swcs'
+        lgn_v1_data = LoadAndAnalyze(swc_dir)
 
     if plot_mode == 'plt':
         PlotInMatplotlib(lgn_v1_data)
