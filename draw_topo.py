@@ -177,7 +177,25 @@ def CheckDuplicateName(swcs_ext):
         logger.error('Duplication found!')
 
 def LoadLGNMesh():
-    """ load LGN mesh, 0:LGN, 1-6:LGN layers 1-6 """
+    """
+    Load LGN mesh, 0:LGN, 1-6:LGN layers 1-6.
+    For right LGN, Ipsilateral is right, Contralateral is left
+    layer | pos  | Eye            | Pathway       | target   Image forming[1]
+    1    Ventral   Contralateral    Magnocellular   IV C a   tend to no
+    2              Ipsilateral      Magnocellular   IV C a
+    3              Ipsilateral      Parvocellular   IV C b
+    4              Contralateral    Parvocellular   IV C b
+    5              Ipsilateral      Parvocellular   IV C b
+    6    Dorsal    Contralateral    Parvocellular   IV C b   yes
+
+    LGN: relay on and off
+
+    Dorsal LGN: receive image forming
+    ventral LGN: non-image-forming ganglion cells
+
+    Ref.
+    [1] https://www.ncbi.nlm.nih.gov/pmc/articles/PMC10016624/
+    """
     mesh_dir = './rm009_mesh/region/LGN/LGN_Layers/'
     mesh_fn_list = ['../LGNright120.obj', 'lgn_1.obj', 'lgn_2.obj', 'lgn_3.obj', 'lgn_4.obj', 'lgn_5.obj', 'lgn_6.obj']
     mesh_list = []
